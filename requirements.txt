@@ -8,3 +8,4 @@ matplotlib
 lightgbm
 scikit-learn
 scipy
+lifelines
