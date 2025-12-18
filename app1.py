@@ -1,12 +1,13 @@
 # ====================================================================
-# Professional HR Attrition Decision Support System
-# Developed by: Nisarg Rathod (VNIT Nagpur)
+# AI-Powered HR Retention & Decision Support System
+# VNIT Nagpur | Nisarg Rathod
 # ====================================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 import shap
 import matplotlib.pyplot as plt
 import lightgbm as lgb
@@ -25,18 +26,17 @@ warnings.filterwarnings("ignore")
 # PAGE CONFIG
 # ====================================================================
 st.set_page_config(
-    page_title="AI-Powered HR Retention System",
+    page_title="Enterprise HR Retention AI",
     page_icon="🏢",
     layout="wide"
 )
 
 # ====================================================================
-# LOAD & TRAIN MODEL (CALIBRATED)
+# MODEL LOADING & CALIBRATION
 # ====================================================================
 @st.cache_data
 def load_model():
-    df = pd.read_csv("HR_comma_sep.csv")
-    df = df.drop_duplicates().reset_index(drop=True)
+    df = pd.read_csv("HR_comma_sep.csv").drop_duplicates().reset_index(drop=True)
 
     X = df.drop("left", axis=1)
     y = df["left"]
@@ -50,111 +50,138 @@ def load_model():
     ])
 
     model = lgb.LGBMClassifier(
-        n_estimators=1888,
-        learning_rate=0.019,
-        num_leaves=22,
+        n_estimators=1800,
+        learning_rate=0.02,
+        num_leaves=24,
         max_depth=11,
         random_state=42
     )
 
-    base_pipeline = Pipeline([
+    pipe = Pipeline([
         ("preprocessor", preprocessor),
         ("classifier", model)
     ])
 
-    base_pipeline.fit(X, y)
+    pipe.fit(X, y)
 
-    calibrated_model = CalibratedClassifierCV(
-        estimator=base_pipeline,
+    calibrated = CalibratedClassifierCV(
+        estimator=pipe,
         method="isotonic",
         cv=5
     )
-    calibrated_model.fit(X, y)
+    calibrated.fit(X, y)
 
-    return calibrated_model, df, base_pipeline, X
+    return calibrated, df, pipe, X
 
-pipeline, df, base_pipeline, X_train = load_model()
+pipeline, df, base_pipe, X_train = load_model()
 
 # ====================================================================
-# BUSINESS LOGIC
+# BUSINESS INTELLIGENCE LOGIC
 # ====================================================================
-def risk_band(prob):
-    if prob < 0.30:
-        return "Low Risk"
-    elif prob < 0.60:
-        return "Medium Risk"
-    return "High Risk"
+def risk_band(p):
+    if p < 0.30:
+        return "Low"
+    elif p < 0.60:
+        return "Medium"
+    return "High"
+
+def estimate_retention_cost(salary_level, risk):
+    base_cost = {"low": 3000, "medium": 8000, "high": 15000}
+    multiplier = {"Low": 0.5, "Medium": 1.0, "High": 1.5}
+    return int(base_cost[salary_level] * multiplier[risk])
+
+def estimate_time_to_leave(prob, years, satisfaction):
+    """
+    Survival-style estimation (months)
+    """
+    base = 36
+    risk_factor = prob * 24
+    tenure_factor = max(0, (years - 3) * 3)
+    satisfaction_factor = (0.6 - satisfaction) * 20 if satisfaction < 0.6 else 0
+    months = max(3, int(base - risk_factor - tenure_factor - satisfaction_factor))
+    return months
 
 def hr_alerts(emp):
     alerts = []
     if emp["satisfaction_level"] < 0.4:
-        alerts.append("Low job satisfaction detected")
+        alerts.append("Low job satisfaction")
     if emp["last_evaluation"] < 0.5:
-        alerts.append("Recent performance evaluation is low")
+        alerts.append("Low recent performance")
     if emp["number_project"] >= 6:
-        alerts.append("High workload – burnout risk")
+        alerts.append("Burnout risk (high workload)")
     if emp["time_spend_company"] >= 4 and emp["promotion_last_5years"] == 0:
-        alerts.append("Long tenure without promotion")
+        alerts.append("Stagnation risk (no promotion)")
     return alerts
 
 # ====================================================================
 # SIDEBAR NAVIGATION
 # ====================================================================
-st.sidebar.title("🏢 HR Analytics System")
-st.sidebar.markdown("**AI-powered employee retention platform**")
+st.sidebar.title("🏢 Enterprise HR AI")
+st.sidebar.markdown("**AI-Driven Retention & Workforce Planning**")
+
 page = st.sidebar.radio(
     "Navigation",
-    ["📊 Executive Dashboard", "🎯 Individual Risk Assessment", "🔍 Explainable AI Insights"]
+    [
+        "📊 Executive Dashboard",
+        "🎯 Employee Risk Assessment",
+        "📈 Retention Cost & Survival",
+        "🔍 Explainable AI (SHAP)"
+    ]
 )
 
 # ====================================================================
-# PAGE 1: EXECUTIVE DASHBOARD
+# PAGE 1 – EXECUTIVE DASHBOARD
 # ====================================================================
 if page == "📊 Executive Dashboard":
     st.title("📊 Executive HR Dashboard")
 
-    total_employees = len(df)
     attrition_rate = df["left"].mean() * 100
     avg_satisfaction = df["satisfaction_level"].mean()
+    high_risk_count = int(attrition_rate / 100 * len(df))
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total Employees", total_employees)
+    c1.metric("Total Employees", len(df))
     c2.metric("Attrition Rate (%)", f"{attrition_rate:.2f}")
     c3.metric("Avg Satisfaction", f"{avg_satisfaction:.2f}")
 
-    st.subheader("Attrition Distribution by Department")
-    fig = px.bar(df, x="Department", color="left", barmode="group", template="plotly_dark")
+    fig = px.bar(
+        df,
+        x="Department",
+        color="left",
+        barmode="group",
+        title="Attrition by Department",
+        template="plotly_dark"
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Key Insight")
     st.info(
-        "Departments with lower satisfaction and high workload show higher attrition risk. "
-        "This dashboard enables proactive workforce planning."
+        "This dashboard enables HR leadership to proactively identify "
+        "high-risk departments and prioritize retention investments."
     )
 
 # ====================================================================
-# PAGE 2: INDIVIDUAL RISK ASSESSMENT
+# PAGE 2 – INDIVIDUAL RISK ASSESSMENT
 # ====================================================================
-if page == "🎯 Individual Risk Assessment":
-    st.title("🎯 Individual Employee Attrition Risk Assessment")
+if page == "🎯 Employee Risk Assessment":
+    st.title("🎯 Individual Employee Attrition Risk")
 
-    with st.form("employee_form"):
+    with st.form("risk_form"):
         c1, c2 = st.columns(2)
 
         with c1:
             satisfaction = st.slider("Satisfaction Level", 0.0, 1.0, 0.5)
-            evaluation = st.slider("Last Evaluation Score", 0.0, 1.0, 0.7)
+            evaluation = st.slider("Last Evaluation", 0.0, 1.0, 0.7)
             projects = st.slider("Number of Projects", 2, 7, 4)
-            hours = st.slider("Avg Monthly Hours", 90, 310, 200)
-            years = st.slider("Years at Company", 2, 10, 3)
+            hours = st.slider("Monthly Hours", 90, 310, 200)
+            years = st.slider("Years at Company", 1, 10, 3)
 
         with c2:
             accident = st.selectbox("Work Accident", ["No", "Yes"])
-            promo = st.selectbox("Promotion in Last 5 Years", ["No", "Yes"])
+            promo = st.selectbox("Promotion in 5 Years", ["No", "Yes"])
             dept = st.selectbox("Department", df["Department"].unique())
-            salary = st.selectbox("Salary", df["salary"].unique())
+            salary = st.selectbox("Salary Level", df["salary"].unique())
 
-        submit = st.form_submit_button("Analyze Employee Risk")
+        submit = st.form_submit_button("Analyze Risk")
 
     if submit:
         emp = pd.DataFrame([{
@@ -169,46 +196,71 @@ if page == "🎯 Individual Risk Assessment":
             "salary": salary
         }])
 
-        with st.spinner("Running AI risk analysis..."):
-            sleep(1)
-            prob = pipeline.predict_proba(emp)[0][1]
+        prob = pipeline.predict_proba(emp)[0][1]
+        risk = risk_band(prob)
 
-        decision = "LEAVE" if prob >= 0.4 else "STAY"
+        gauge = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=prob * 100,
+            title={"text": "Attrition Risk (%)"},
+            gauge={"axis": {"range": [0, 100]},
+                   "bar": {"color": "red" if risk == "High" else "orange"}}
+        ))
 
-        st.subheader(f"Prediction: {decision}")
-        st.subheader(f"Attrition Risk Level: {risk_band(prob)}")
+        st.plotly_chart(gauge, use_container_width=True)
+
+        st.subheader(f"Risk Level: {risk}")
 
         alerts = hr_alerts(emp.iloc[0])
         if alerts:
-            st.warning("⚠️ HR Risk Signals")
+            st.warning("⚠️ HR Risk Indicators")
             for a in alerts:
                 st.write("•", a)
 
-        st.success(
-            "This assessment combines machine learning predictions with human-centered HR rules "
-            "to ensure reliable and actionable decisions."
+# ====================================================================
+# PAGE 3 – RETENTION COST & SURVIVAL ANALYSIS
+# ====================================================================
+if page == "📈 Retention Cost & Survival":
+    st.title("📈 Retention Cost & Time-to-Exit Estimation")
+
+    with st.expander("Why this matters"):
+        st.write(
+            "This module estimates **financial loss** and **expected time to exit**, "
+            "allowing HR to prioritize interventions based on urgency and cost impact."
         )
 
-# ====================================================================
-# PAGE 3: EXPLAINABLE AI INSIGHTS
-# ====================================================================
-if page == "🔍 Explainable AI Insights":
-    st.title("🔍 Explainable AI – Model Transparency")
+    satisfaction = st.slider("Employee Satisfaction", 0.0, 1.0, 0.4)
+    years = st.slider("Years at Company", 1, 10, 4)
+    prob = st.slider("Predicted Attrition Probability", 0.0, 1.0, 0.6)
+    salary = st.selectbox("Salary Level", ["low", "medium", "high"])
 
-    st.write(
-        "This section explains **why** the AI model predicts attrition, "
-        "ensuring transparency and trust for HR decision-makers."
+    risk = risk_band(prob)
+    cost = estimate_retention_cost(salary, risk)
+    months = estimate_time_to_leave(prob, years, satisfaction)
+
+    c1, c2 = st.columns(2)
+    c1.metric("Estimated Retention Cost ($)", cost)
+    c2.metric("Estimated Time to Exit (Months)", months)
+
+    st.success(
+        "HR Recommendation: Initiate retention actions **before "
+        f"{months} months** to minimize replacement cost."
     )
 
-    model = base_pipeline.named_steps["classifier"]
-    preprocessor = base_pipeline.named_steps["preprocessor"]
+# ====================================================================
+# PAGE 4 – EXPLAINABLE AI (SHAP)
+# ====================================================================
+if page == "🔍 Explainable AI (SHAP)":
+    st.title("🔍 Explainable AI – Model Transparency")
+
+    model = base_pipe.named_steps["classifier"]
+    preprocessor = base_pipe.named_steps["preprocessor"]
 
     X_proc = preprocessor.transform(X_train)
     if issparse(X_proc):
         X_proc = X_proc.toarray()
 
-    feature_names = preprocessor.get_feature_names_out()
-    X_proc_df = pd.DataFrame(X_proc, columns=feature_names)
+    X_proc_df = pd.DataFrame(X_proc, columns=preprocessor.get_feature_names_out())
 
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(X_proc_df)
@@ -224,7 +276,6 @@ if page == "🔍 Explainable AI Insights":
     st.pyplot(fig2)
 
     st.info(
-        "Explainable AI ensures the system does not behave like a black box. "
-        "HR managers can clearly see how satisfaction, workload, and tenure "
-        "drive attrition risk."
+        "Explainable AI ensures transparency, fairness, and trust — "
+        "critical for HR decision-making."
     )
