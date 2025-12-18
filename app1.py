@@ -23,45 +23,71 @@ from scipy.sparse import issparse
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
-        title={"font": {"size": title_size}},
+        title={"font": {"size": title_size, "family": "tahoma"}},
         hoverlabel={"font_size": hover_font_size}
     )
 
 def box_plot(the_df, column):
-    fig = px.box(the_df, x=column, template="plotly_dark")
+    fig = px.box(
+        data_frame=the_df,
+        x=column,
+        template="plotly_dark",
+        height=600
+    )
     custome_layout(fig)
     return fig
 
 def bar_plot(the_df, column):
-    fig = px.bar(the_df[column].value_counts(), template="plotly_dark")
+    fig = px.bar(
+        the_df[column].value_counts(),
+        template="plotly_dark",
+        height=600
+    )
     custome_layout(fig)
     return fig
 
 def pie_chart(the_df, column):
-    fig = px.pie(the_df, names=column, template="plotly_dark")
-    custome_layout(fig)
+    fig = px.pie(
+        the_df,
+        names=column,
+        template="plotly_dark",
+        height=600
+    )
+    custome_layout(fig, showlegend=True)
     return fig
 
 def create_heat_map(the_df):
     corr = the_df.select_dtypes(include=np.number).corr()
-    fig = px.imshow(corr, text_auto=True, template="plotly_dark")
+    fig = px.imshow(
+        corr,
+        text_auto="0.2f",
+        aspect=1,
+        color_continuous_scale="greens",
+        template="plotly_dark",
+        height=650
+    )
     return fig
 
 # ====================================================================
-# Main App
+# Main App Function
 # ====================================================================
 def main():
-    st.set_page_config(page_title="Employee Retention AI", page_icon="🤖", layout="wide")
+    st.set_page_config(
+        page_title="Employee Retention AI",
+        page_icon="🤖",
+        layout="wide"
+    )
     warnings.filterwarnings("ignore")
 
     # ================================================================
-    # Load Data & Train + CALIBRATE MODEL
+    # Load Data + Train + CALIBRATE MODEL (FIXED)
     # ================================================================
     @st.cache_data
     def load_data_and_train_model():
         df = pd.read_csv("HR_comma_sep.csv")
         df_original = df.copy()
 
+        df = df.drop_duplicates().reset_index(drop=True)
         X = df.drop("left", axis=1)
         y = df["left"]
 
@@ -81,18 +107,20 @@ def main():
             random_state=42
         )
 
-        pipeline = Pipeline([
+        base_pipeline = Pipeline([
             ("preprocessor", preprocessor),
             ("classifier", model)
         ])
 
-        pipeline.fit(X, y)
+        base_pipeline.fit(X, y)
 
+        # ✅ Correct for sklearn >=1.3
         calibrated_pipeline = CalibratedClassifierCV(
-            base_estimator=pipeline,
+            estimator=base_pipeline,
             method="isotonic",
             cv=5
         )
+
         calibrated_pipeline.fit(X, y)
 
         return calibrated_pipeline, df_original
@@ -129,7 +157,7 @@ def main():
     # ================================================================
     with st.sidebar:
         st.title("🤖 AI Retention Assistant")
-        st.title("Developed by Nisarg Rathod")
+        st.write("**Developed by Nisarg Rathod**")
         page = option_menu(
             None,
             ["Home", "Vizualizations", "Prediction"],
@@ -142,16 +170,19 @@ def main():
     # ================================================================
     if page == "Home":
         st.header("Employee Retention Dataset")
-        st.dataframe(df.head())
+        st.dataframe(df.head(100), use_container_width=True)
+        st.subheader("Dataset Summary")
+        st.table(df.describe().T)
 
     if page == "Vizualizations":
-        st.header("Data Visualization")
+        st.header("Data Visualizations")
+        st.subheader("Correlation Heatmap")
         st.plotly_chart(create_heat_map(df), use_container_width=True)
 
     if page == "Prediction":
         st.header("🎯 Predict Attrition & HR Decision Support")
 
-        with st.form("predict"):
+        with st.form("predict_form"):
             sat_map = {
                 "Very Dissatisfied": 0.1,
                 "Dissatisfied": 0.3,
@@ -166,6 +197,7 @@ def main():
             }
 
             c1, c2 = st.columns(2)
+
             with c1:
                 satisfaction = sat_map[st.select_slider("Satisfaction Level", sat_map.keys())]
                 evaluation = eval_map[st.select_slider("Last Evaluation", eval_map.keys())]
@@ -199,10 +231,10 @@ def main():
                 probs = pipeline.predict_proba(input_df)[0]
                 leave_prob = probs[1]
 
-                # Dynamic HR-sensitive threshold
-                prediction = "LEAVE" if leave_prob >= 0.4 else "STAY"
+                # HR-sensitive threshold
+                decision = "LEAVE" if leave_prob >= 0.4 else "STAY"
 
-            st.subheader(f"Prediction: {prediction}")
+            st.subheader(f"Prediction: {decision}")
             st.subheader(f"Attrition Risk Level: {get_risk_band(leave_prob)}")
 
             alerts = hr_warnings(input_df.iloc[0])
@@ -211,8 +243,8 @@ def main():
                 for a in alerts:
                     st.write("•", a)
 
-            if prediction == "LEAVE":
-                st.info("💡 HR Action Recommended")
+            if decision == "LEAVE":
+                st.info("💡 HR Action Recommended: Immediate retention strategy advised.")
 
 # ====================================================================
 if __name__ == "__main__":
