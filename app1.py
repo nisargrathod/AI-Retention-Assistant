@@ -1,6 +1,3 @@
-Here is the complete, integrated code. I have added the necessary imports, created the "Logic Engine" functions (Causal Inference and Budget Optimizer), and integrated the new "Decision Support" tab into your existing Phase 1 application.
-
-```python
 # ====================================================================
 # All Necessary Imports
 # ====================================================================
@@ -507,4 +504,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
