@@ -17,7 +17,7 @@ import warnings
 from time import sleep
 from scipy.sparse import issparse
 
-# --- NEW: Imports for Evaluation 1 (Logic Engine) ---
+# --- Imports for Evaluation 1 (Logic Engine) ---
 import dowhy
 from dowhy import CausalModel
 from scipy.optimize import milp, LinearConstraint, Bounds
@@ -128,26 +128,24 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
             tabs[i].plotly_chart(figs[i], use_container_width=True)
 
 # ====================================================================
-# NEW: Logic Engine Functions (Evaluation 1)
+# Logic Engine Functions (Evaluation 1)
 # ====================================================================
 
 def run_causal_inference(df):
     """
     Step 1: Implement Causal Inference using DoWhy.
-    Target: Find Root Causes (Salary -> Satisfaction -> Attrition).
+    FIX: Using 'backdoor.linear_regression' for stability instead of propensity_score_weighting.
     """
     st.subheader("🔬 Step 1: Causal Inference (Root Cause Analysis)")
     
     # Data Preparation for DoWhy
-    # We map categorical salary to numeric for the treatment logic
     df_causal = df.copy()
+    # Map salary to numeric
     salary_map = {'low': 1, 'medium': 2, 'high': 3}
     df_causal['salary_num'] = df_causal['salary'].map(salary_map)
     
     # Define Causal Graph based on hypothesis
-    # Hypothesis: Salary -> Satisfaction -> Attrition AND AverageMonthlyHours (Overtime) -> Attrition
-    # Note: 'Work-Life-Balance' is not in the dataset, so we link Overtime directly to Attrition 
-    # or via Satisfaction to fit the available data.
+    # Hypothesis: Salary -> Satisfaction -> Attrition
     causal_graph = """digraph {
         salary_num -> satisfaction_level;
         satisfaction_level -> left;
@@ -159,8 +157,11 @@ def run_causal_inference(df):
         st.graphviz_chart(causal_graph)
 
     # 1. Define Model
+    # We drop non-numeric columns that aren't mapped to avoid issues with linear regression
+    df_model = df_causal[['salary_num', 'satisfaction_level', 'average_montly_hours', 'number_project', 'left']]
+    
     model = CausalModel(
-        data=df_causal,
+        data=df_model,
         treatment='salary_num',
         outcome='left',
         graph=causal_graph.replace('\n', ' ')
@@ -170,19 +171,26 @@ def run_causal_inference(df):
     identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
 
     # 3. Estimate Effect
-    estimate = model.estimate_effect(identified_estimand,
-                                     method_name="backdoor.propensity_score_weighting")
+    # CHANGED: Using linear_regression which is more robust than propensity_score_weighting
+    try:
+        estimate = model.estimate_effect(identified_estimand,
+                                         method_name="backdoor.linear_regression")
+        
+        st.success(f"📊 **Average Treatment Effect (ATE):** {estimate.value:.4f}")
+        st.info("Interpretation: Increasing salary by 1 level (e.g., Low to Medium) decreases the probability of attrition by the value above.")
+        
+        # 4. Refutation Tests
+        st.write("🧪 **Running Refutation Tests (Random Common Cause)** to validate robustness...")
+        refute = model.refute_estimate(identified_estimand, estimate,
+                                       method_name="random_common_cause")
+        
+        st.table(refute.refutation_result)
+        st.markdown("*If 'New Effect' is close to 'Estimated Effect', the model is robust.*")
+        
+    except Exception as e:
+        st.error(f"An error occurred during estimation: {e}")
+        st.warning("This is likely due to data structure limitations. The Causal Graph logic remains valid for understanding relationships.")
 
-    st.success(f"📊 **Average Treatment Effect (ATE):** {estimate.value:.4f}")
-    st.info("Interpretation: Increasing salary by 1 level (e.g., Low to Medium) decreases the probability of attrition by the value above.")
-
-    # 4. Refutation Tests (Random Common Cause)
-    st.write("🧪 **Running Refutation Tests (Random Common Cause)** to validate robustness...")
-    refute = model.refute_estimate(identified_estimand, estimate,
-                                   method_name="random_common_cause")
-    
-    st.table(refute.refutation_result)
-    st.markdown("*If 'New Effect' is close to 'Estimated Effect', the model is robust.*")
 
 def run_budget_optimizer(df, pipeline, budget_limit):
     """
@@ -193,7 +201,6 @@ def run_budget_optimizer(df, pipeline, budget_limit):
     
     # Get predictions for all employees to find risk
     X = df.drop('left', axis=1)
-    # We need probabilities of leaving (class 1)
     probas = pipeline.predict_proba(X)[:, 1]
     
     # Create a working dataframe for optimization
@@ -242,14 +249,17 @@ def run_budget_optimizer(df, pipeline, budget_limit):
     c = -candidates['net_savings_if_retained'].values 
     
     # Constraint: Costs <= Budget
-    # A_ub @ x <= b_ub
     A = np.array([candidates['intervention_cost'].values])
     b = np.array([budget_limit])
     
     integrality = np.ones(n) # 1 means integer variable (0 or 1)
     
     with st.spinner("Calculating optimal budget allocation..."):
-        res = milp(c=c, constraints=LinearConstraint(A, lb=-np.inf, ub=b), integrality=integrality)
+        try:
+            res = milp(c=c, constraints=LinearConstraint(A, lb=-np.inf, ub=b), integrality=integrality)
+        except Exception as e:
+            st.error(f"Optimization error: {e}")
+            return None
 
     if res.success:
         selected_indices = np.where(res.x == 1)[0]
@@ -366,8 +376,8 @@ def main():
         st.title(":green[Develop by]-Nisarg Rathod")
         page = option_menu(
             menu_title=None,
-            options=['Home', 'Vizualizations', 'Prediction', 'Explain Predictions', 'Decision Support'],  # Added 'Decision Support'
-            icons=['diagram-3-fill', 'bar-chart-line-fill', "graph-up-arrow", 'lightbulb-fill', 'cpu-fill'], # Added icon
+            options=['Home', 'Vizualizations', 'Prediction', 'Explain Predictions', 'Decision Support'],  
+            icons=['diagram-3-fill', 'bar-chart-line-fill', "graph-up-arrow", 'lightbulb-fill', 'cpu-fill'], 
             menu_icon="cast", default_index=0, styles=side_bar_options_style
         )
 
@@ -480,8 +490,7 @@ def main():
             
             if results:
                 selected_df, total_cost, total_savings = results
-                
-                st.success("Sir, I have implemented Causal Inference to find the true root cause of attrition for specific employees, and I used Operations Research to calculate the exact budget required to retain them at the lowest cost.")
+            
                 
                 # Metrics
                 m1, m2, m3 = st.columns(3)
