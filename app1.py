@@ -24,13 +24,115 @@ from scipy.optimize import milp, LinearConstraint, Bounds
 # ====================================================================
 
 # ====================================================================
+# 1. ADVANCED UI STYLING (CSS)
+# ====================================================================
+st.markdown("""
+<style>
+    /* --- Font & General --- */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+    
+    .stApp {
+        background-color: #0E1117;
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* --- Sidebar Styling --- */
+    [data-testid="stSidebar"] {
+        background-color: #161b22;
+        border-right: 1px solid #30363d;
+    }
+    
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    /* --- Main Content Styling --- */
+    .main {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        padding-left: 2rem;
+        padding-right: 2rem;
+        background-color: #0E1117;
+    }
+
+    h1, h2, h3 {
+        font-family: 'Inter', sans-serif;
+        font-weight: 600;
+        color: #ffffff;
+    }
+
+    /* --- Metric Cards (Big Numbers) --- */
+    [data-testid="stMetricValue"] {
+        font-size: 2.5rem;
+        font-weight: 700;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 1rem;
+        font-weight: 400;
+        color: #9ca3af;
+    }
+
+    /* --- Custom Card Container Class --- */
+    .custom-card {
+        background-color: #1c2128;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        margin-bottom: 20px;
+        color: #c9d1d9;
+    }
+
+    /* --- Button Styling --- */
+    div[data-testid="stFormSubmitButton"] > button {
+        width: 100%;
+        background: linear-gradient(90deg, #17B794 0%, #11998e 100%);
+        border: none;
+        padding: 12px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        font-size: 16px;
+        transition: all 0.3s ease;
+    }
+    div[data-testid="stFormSubmitButton"] > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(23, 183, 148, 0.4);
+    }
+
+    /* --- Dataframe Styling --- */
+    .dataframe {
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .dataframe th {
+        background-color: #21262d;
+        color: #ffffff;
+        font-weight: 600;
+    }
+    
+    /* --- Expander Styling --- */
+    .streamlit-expanderHeader {
+        background-color: #21262d;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ====================================================================
 # Visualization Functions
 # ====================================================================
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
         title={"font": {"size": title_size, "family": "tahoma"}},
-        hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"}
+        hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"},
+        paper_bgcolor="#0E1117",
+        plot_bgcolor="#161b22",
+        font_color="#c9d1d9"
     )
 
 def box_plot(the_df, column):
@@ -96,6 +198,7 @@ def create_heat_map(the_df):
         title="Correlation Heatmap of Data",
         height=650,
     )
+    custome_layout(fig)
     return fig
 
 def create_vizualization(the_df, viz_type="box", data_type="number"):
@@ -133,17 +236,16 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
 
 def analyze_why_people_leave(df):
     """
-    HR Friendly Version: Insight Cards + Visible Causal Graph (For Evaluation).
+    HR Friendly Version: Insight Cards + Visible Causal Graph.
     """
-    st.subheader("🔍 Why do people leave? (Root Cause Analysis)")
-    st.write("Our AI has analyzed the data and ranked the **Top 3 Reasons** why employees quit. Here is what matters most:")
+    st.markdown("### 🔍 Why do people leave?")
+    st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Our AI has analyzed the data to find the root causes of attrition.</p>", unsafe_allow_html=True)
     
-    # 1. Run Causal Logic (Hidden Math)
+    # 1. Run Causal Logic
     df_causal = df.copy()
     salary_map = {'low': 1, 'medium': 2, 'high': 3}
     df_causal['salary_num'] = df_causal['salary'].map(salary_map)
     
-    # Define Causal Graph (DAG) for Evaluation Requirement
     causal_graph = """digraph {
         salary_num -> satisfaction_level;
         satisfaction_level -> left;
@@ -153,131 +255,116 @@ def analyze_why_people_leave(df):
     
     df_model = df_causal[['salary_num', 'satisfaction_level', 'average_montly_hours', 'number_project', 'left']]
     
-    # --- VISUALIZATION STEP FOR EVALUATION ---
-    # Showing the Causal Graph as requested by Evaluation 1 requirements
-    st.write("### 📊 AI Causal Logic Diagram")
-    st.graphviz_chart(causal_graph)
-    st.caption("This diagram shows the AI's internal hypothesis regarding cause and effect (Salary -> Satisfaction -> Attrition).")
-    st.write("---")
-
-    # --- Calculate Effects (Logic) ---
-    effects = {}
+    # --- VISUALIZATION STEP (In a Card) ---
+    st.markdown("""
+    <div class="custom-card">
+        <h4 style='margin-top:0; color: #17B794;'>📊 AI Causal Logic Diagram</h4>
+        <p style='font-size: 0.9em; color: #8b949e; margin-bottom: 15px;'>
+            This diagram visualizes the internal hypothesis: How Salary impacts Satisfaction, and how that leads to Attrition.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Salary Effect
+    st.graphviz_chart(causal_graph)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- Calculate Effects ---
+    effects = {}
     model_sal = CausalModel(data=df_model, treatment='salary_num', outcome='left', graph=causal_graph.replace('\n', ' '))
     est_sal = model_sal.estimate_effect(model_sal.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
     effects['Salary'] = abs(est_sal.value)
     
-    # Satisfaction Effect
     model_sat = CausalModel(data=df_model, treatment='satisfaction_level', outcome='left', graph=causal_graph.replace('\n', ' '))
     est_sat = model_sat.estimate_effect(model_sat.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
     effects['Satisfaction'] = abs(est_sat.value)
     
-    # Hours Effect
     model_hr = CausalModel(data=df_model, treatment='average_montly_hours', outcome='left', graph=causal_graph.replace('\n', ' '))
     est_hr = model_hr.estimate_effect(model_hr.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
-    effects['Overwork'] = abs(est_hr.value) * 10 # Scale up for comparison
+    effects['Overwork'] = abs(est_hr.value) * 10
 
-    # --- Rank the Effects ---
     sorted_effects = sorted(effects.items(), key=lambda item: item[1], reverse=True)
     
-    # Define the display logic
     def get_display_info(rank, factor, value):
         if rank == 1:
-            color = "#FF4B4B" # Red
-            status = "CRITICAL DRIVER"
-            advice = "This is the #1 reason people leave. Focus here first."
+            color = "#FF4B4B"; status = "CRITICAL DRIVER"; advice = "This is the #1 reason people leave."
         elif rank == 2:
-            color = "#FFA500" # Orange
-            status = "MAJOR FACTOR"
-            advice = "Important to address, but secondary to the #1 driver."
+            color = "#FFA500"; status = "MAJOR FACTOR"; advice = "Important to address."
         else:
-            color = "#FFD700" # Yellow/Gold
-            status = "MODERATE FACTOR"
-            advice = "Monitor this, but it is not the main cause of attrition."
-            
+            color = "#FFD700"; status = "MODERATE FACTOR"; advice = "Monitor this factor."
         return color, status, advice
 
-    # --- Display Insight Cards ---
+    # --- Display Insight Cards (Styled) ---
     c1, c2, c3 = st.columns(3)
-    
     for idx, (col, factor_value) in enumerate(sorted_effects):
         color, status, advice = get_display_info(idx + 1, col, factor_value)
         
+        card_html = f"""
+        <div style="background-color: {color}20; border: 1px solid {color}; border-radius: 12px; padding: 20px; text-align: center; height: 100%;">
+            <h2 style="color: {color}; margin: 0; font-size: 2rem;">#{idx+1} {col}</h2>
+            <h4 style="color: white; margin: 10px 0; font-weight: 600;">{status}</h4>
+            <p style="color: #ccc; font-size: 0.9rem;">{advice}</p>
+        </div>
+        """
         with [c1, c2, c3][idx]:
-            st.markdown(f"""
-            <div style="background-color: {color}20; padding: 20px; border-radius: 10px; border: 1px solid {color}; text-align: center;">
-                <h2 style="color: {color}; margin: 0;">#{idx+1} {col}</h2>
-                <h4 style="color: white; margin: 10px 0;">{status}</h4>
-                <p style="color: #ccc; font-size: 14px;">{advice}</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(card_html, unsafe_allow_html=True)
 
-    # --- UPDATED VALIDATION SECTION (Placebo Added) ---
-    with st.expander("Show Technical Validation (Refutation Tests)"):
+    # --- UPDATED VALIDATION SECTION ---
+    with st.expander("🔧 Technical Validation (For Evaluation)"):
         st.write("### 1. Random Common Cause Test")
-        st.caption("Does the effect change when we add a random common cause? (It shouldn't).")
         try:
             refute_rcc = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="random_common_cause")
             st.table(refute_rcc.refutation_result)
         except Exception as e:
-            st.error(f"Error running Random Common Cause: {e}")
+            st.error(f"Error: {e}")
         
         st.write("---")
-        
         st.write("### 2. Placebo Treatment Refuter")
-        st.caption("Does the model find an effect when we replace the treatment with random noise? (It shouldn't).")
         try:
-            # This validates the "Scientific Soundness" requirement
             refute_placebo = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="placebo_treatment_refuter")
             st.table(refute_placebo.refutation_result)
         except Exception as e:
-            st.warning(f"Placebo test could not run on this specific data structure: {e}")
+            st.warning(f"Placebo test error: {e}")
 
 
 def plan_retention_budget(df, pipeline, budget_limit):
     """
     HR Friendly Version: Budget Planner.
     """
-    st.subheader("💰 Retention Budget Planner")
-    st.write("We have identified employees who are at **High Risk** of leaving. Use this tool to see who is worth investing in to save the company money.")
+    st.markdown("### 💰 Retention Budget Planner")
+    st.markdown("<p style='color: #9ca3af;'>Optimize your spend to save on replacement costs.</p>", unsafe_allow_html=True)
     
-    # Get predictions
     X = df.drop('left', axis=1)
     probas = pipeline.predict_proba(X)[:, 1]
-    
     opt_df = df.copy()
     opt_df['attrition_risk'] = probas
     high_risk_df = opt_df[opt_df['attrition_risk'] > 0.5].copy()
     
     if len(high_risk_df) == 0:
-        st.success("Great news! Our model predicts very few employees are currently at high risk of leaving.")
+        st.success("🎉 Great news! The workforce is stable. No immediate high-risk interventions needed.")
         return None
 
-    # --- Economics (INR) ---
+    # --- Economics ---
     salary_val_map = {'low': 400000, 'medium': 600000, 'high': 900000}
     high_risk_df['annual_salary'] = high_risk_df['salary'].map(salary_val_map)
     high_risk_df['replacement_cost'] = high_risk_df['annual_salary'] * 0.5
     high_risk_df['expected_loss'] = high_risk_df['attrition_risk'] * high_risk_df['replacement_cost']
-    
-    # Cost of Fixing them: 10% Raise
     high_risk_df['intervention_cost'] = high_risk_df['annual_salary'] * 0.10
     high_risk_df['net_savings'] = high_risk_df['expected_loss'] - high_risk_df['intervention_cost']
 
     candidates = high_risk_df[high_risk_df['net_savings'] > 0].copy()
     
     if len(candidates) == 0:
-        st.warning("It is currently not cost-effective to offer raises to the high-risk group based on the calculated replacement costs.")
+        st.warning("⚠️ It is currently not cost-effective to offer raises based on the current risk levels.")
         return None
 
-    # --- Optimization (MILP / Knapsack) ---
+    # --- Optimization ---
     n = len(candidates)
     c = -candidates['net_savings'].values 
     A = np.array([candidates['intervention_cost'].values])
     b = np.array([budget_limit])
     integrality = np.ones(n)
     
-    with st.spinner("Calculating the best employees to invest in..."):
+    with st.spinner("🧮 Calculating optimal resource allocation..."):
         try:
             res = milp(c=c, constraints=LinearConstraint(A, lb=-np.inf, ub=b), integrality=integrality)
         except Exception as e:
@@ -287,13 +374,11 @@ def plan_retention_budget(df, pipeline, budget_limit):
     if res.success:
         selected_indices = np.where(res.x == 1)[0]
         selected_employees = candidates.iloc[selected_indices]
-        
         total_cost = selected_employees['intervention_cost'].sum()
         total_savings = selected_employees['net_savings'].sum()
-        
         return selected_employees, total_cost, total_savings
     else:
-        st.error("The budget provided is too low to retain any high-risk employees effectively.")
+        st.error("❌ The budget provided is too low to retain any high-risk employees effectively.")
         return None
 
 # ====================================================================
@@ -344,67 +429,85 @@ def main():
     def get_retention_strategies(employee_data):
         strategies = []
         if isinstance(employee_data, pd.DataFrame): employee_data = employee_data.iloc[0]
-        if employee_data['satisfaction_level'] <= 0.45: strategies.append("Conduct a one-on-one meeting to discuss job satisfaction and well-being.")
-        if employee_data['number_project'] <= 2: strategies.append("Employee may be under-utilized. Discuss career aspirations and find new projects.")
-        if employee_data['number_project'] >= 6: strategies.append("Employee is at high risk of burnout. Assess workload and prioritize projects.")
-        if employee_data['time_spend_company'] >= 4 and employee_data['promotion_last_5years'] == 0: strategies.append("Develop a clear career path and discuss opportunities for growth.")
-        if employee_data['last_evaluation'] >= 0.8 and employee_data['satisfaction_level'] < 0.6: strategies.append("This is a high-performer but may be unhappy. Acknowledge contributions with rewards.")
-        if not strategies: strategies.append("No specific high-risk factors detected, but continue to monitor engagement.")
+        if employee_data['satisfaction_level'] <= 0.45: strategies.append("🗣️ Conduct 1-on-1 meeting.")
+        if employee_data['number_project'] <= 2: strategies.append("📈 Discuss career aspirations.")
+        if employee_data['number_project'] >= 6: strategies.append("⚠️ Assess workload/burnout.")
+        if employee_data['time_spend_company'] >= 4 and employee_data['promotion_last_5years'] == 0: strategies.append("📊 Develop career path.")
+        if employee_data['last_evaluation'] >= 0.8 and employee_data['satisfaction_level'] < 0.6: strategies.append("🏆 Acknowledge high performance.")
+        if not strategies: strategies.append("✅ Monitor engagement.")
         return strategies
 
-    st.markdown(
-        """<style>
-        .main { text-align: center; }
-        .st-emotion-cache-16txtl3 h1 { font: bold 29px arial; text-align: center; margin-bottom: 15px; }
-        div[data-testid=stSidebarContent] { background-color: #111; border-right: 4px solid #222; padding: 8px!important; }
-        div[data-testid=stFormSubmitButton]> button{ width: 100%; background-color: #111; border: 2px solid #17B794; padding: 18px; border-radius: 30px; opacity: 0.8; }
-        div[data-testid=stFormSubmitButton]  p{ font-weight: bold; font-size : 20px; }
-        div[data-testid=stFormSubmitButton]> button:hover{ opacity: 1; border: 2px solid #17B794; color: #fff; }
-        </style>""", unsafe_allow_html=True
-    )
-
-    side_bar_options_style = {
-        "container": {"padding": "0!important", "background-color": 'transparent'},
-        "icon": {"color": "white", "font-size": "16px"},
-        "nav-link": {"color": "#fff", "font-size": "18px", "text-align": "left", "margin": "0px", "margin-bottom": "15px"},
-        "nav-link-selected": {"background-color": "#17B794", "font-size": "15px"},
-    }
-
+    # --- SIDEBAR ---
     with st.sidebar:
-        st.title(":green[AI Retention] Assistant")
-        st.title(":green[Develop by]-Nisarg Rathod")
-        # CHANGED MENU ITEM
+        st.markdown("""
+        <div style='padding: 20px; text-align: center;'>
+            <h1 style='font-size: 1.8rem; color: #17B794; margin-bottom: 0;'>AI Retention</h1>
+            <p style='color: #8b949e; font-size: 0.9rem; margin-top: 5px;'>Assistant Dashboard</p>
+        </div>
+        <hr style='border-color: #30363d; margin: 20px 0;'>
+        """, unsafe_allow_html=True)
+        
         page = option_menu(
             menu_title=None,
             options=['Home', 'Vizualizations', 'Prediction', 'Explain Predictions', 'Retention Strategy'],  
-            icons=['diagram-3-fill', 'bar-chart-line-fill', "graph-up-arrow", 'lightbulb-fill', 'currency-rupee'], 
-            menu_icon="cast", default_index=0, styles=side_bar_options_style
+            icons=['house', 'bar-chart-line-fill', "graph-up-arrow", 'lightbulb-fill', 'currency-rupee'], 
+            menu_icon="cast", default_index=0, 
+            styles={
+                "container": {"padding": "0!important", "background-color": 'transparent'},
+                "icon": {"color": "#17B794", "font-size": "18px"},
+                "nav-link": {"color": "#c9d1d9", "font-size": "16px", "text-align": "left", "margin": "0px", "margin-bottom": "10px"},
+                "nav-link-selected": {"background-color": "#21262d", "border-radius": "8px", "color": "#17B794"},
+            }
         )
+        
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='padding: 20px; text-align: center; color: #8b949e; font-size: 0.8rem;'>
+            Developed by<br><strong>Nisarg Rathod</strong>
+        </div>
+        """, unsafe_allow_html=True)
 
     # ====================================================================
     # Pages
     # ====================================================================
     if page == "Home":
-        st.header('Employee Retention Classification 👨‍💼')
+        st.markdown("<h1 style='margin-bottom: 5px;'>👋 Welcome Back, HR Manager</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af; font-size: 1.1rem; margin-top: 0;'>Here is your workforce overview.</p>", unsafe_allow_html=True)
+        
+        # KPI Metrics
+        total_employees = len(df)
+        attrition_rate = (df['left'].sum() / len(df)) * 100
+        avg_satisfaction = df['satisfaction_level'].mean()
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Workforce", f"{total_employees:,}")
+        col2.metric("Attrition Rate", f"{attrition_rate:.1f}%", delta="Current")
+        col3.metric("Avg. Satisfaction", f"{avg_satisfaction:.2f} / 1.0")
+
+        st.markdown("---")
+        
+        # Data Preview in a Card
+        st.markdown("### 📄 Employee Data Snapshot")
         st.dataframe(df.head(100), use_container_width=True)
-        st.write("***"); st.subheader("Data Summary Overview 🧐"); st.table(df.describe().T)
+        
+        with st.expander("📊 Data Statistics"):
+            st.table(df.describe().T)
 
     if page == "Vizualizations":
-        st.header("Data Vizualizations 📉")
-        st.subheader("Numerical Data Distributions")
+        st.header("📉 Data Visualizations")
         create_vizualization(df, viz_type="box", data_type="number")
-        st.subheader("Categorical Data Distributions")
         create_vizualization(df, viz_type="bar", data_type="object")
-        st.subheader("Low-Cardinality Feature Distributions")
         create_vizualization(df, viz_type="pie")
-        st.subheader("Feature Correlation Heatmap")
         st.plotly_chart(create_heat_map(df), use_container_width=True)
 
     if page == "Prediction":
-        st.header("🎯 Predict Attrition & Get Recommendations")
+        st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess risk.</p>", unsafe_allow_html=True)
+        
         with st.form("Predict_value_form"):
             satisfaction_map = {'Very Dissatisfied': 0.1, 'Dissatisfied': 0.3, 'Neutral': 0.5, 'Satisfied': 0.7, 'Very Satisfied': 0.9}
             evaluation_map = {'Needs Improvement': 0.4, 'Meets Expectations': 0.7, 'Exceeds Expectations': 0.9}
+            
             c1, c2 = st.columns(2)
             with c1:
                 satisfaction_text = st.select_slider('Satisfaction Level', options=satisfaction_map.keys())
@@ -417,7 +520,8 @@ def main():
                 promotion_text = st.selectbox('Promotion in Last 5 Years', ('No', 'Yes'))
                 Department = st.selectbox('Department', df['Department'].unique())
                 salary = st.selectbox('Salary', df['salary'].unique())
-            predict_button = st.form_submit_button(label='Get Prediction & Advice')
+            
+            predict_button = st.form_submit_button(label='🔮 Analyze Employee')
 
         if predict_button:
             satisfaction_level = satisfaction_map[satisfaction_text]; last_evaluation = evaluation_map[evaluation_text]
@@ -427,34 +531,49 @@ def main():
                           'time_spend_company': time_spend_company, 'Work_accident': Work_accident,
                           'promotion_last_5years': promotion_last_5years, 'Department': Department, 'salary': salary}
             input_df = pd.DataFrame([input_data])
-            with st.spinner('Analyzing Employee Profile...'):
+            
+            with st.spinner('AI is analyzing...'):
                 sleep(1); prediction = pipeline.predict(input_df)[0]; prediction_probas = pipeline.predict_proba(input_df)[0]
-                st.subheader('Prediction Result'); st.write("---")
+                
+                # Result Card
+                st.markdown("---")
                 pred_col, stay_prob_col, leave_prob_col = st.columns(3)
+                
                 with pred_col:
-                    if prediction == 0: st.subheader("Employee is Likely to"); st.subheader(":green[STAY]")
-                    else: st.subheader("Employee is Likely to"); st.subheader(":red[LEAVE]")
-                with stay_prob_col: st.subheader("Probability to Stay"); st.subheader(f"{prediction_probas[0]:.2%}")
-                with leave_prob_col: st.subheader("Probability to Leave"); st.subheader(f"{prediction_probas[1]:.2%}")
-                st.write("---")
+                    if prediction == 0:
+                        st.markdown("""
+                        <div class='custom-card' style='text-align: center; border: 1px solid #17B794;'>
+                            <h2 style='color: #17B794;'>STAY</h2>
+                            <p>Employee is likely to stay.</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown("""
+                        <div class='custom-card' style='text-align: center; border: 1px solid #FF4B4B;'>
+                            <h2 style='color: #FF4B4B;'>LEAVE</h2>
+                            <p>High risk of attrition.</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                with stay_prob_col: 
+                    st.metric("Stay Probability", f"{prediction_probas[0]:.1%}")
+                with leave_prob_col: 
+                    st.metric("Leave Probability", f"{prediction_probas[1]:.1%}")
+                
                 if prediction == 1:
-                    st.subheader('💡 Recommended Retention Strategies:')
+                    st.markdown("---")
+                    st.markdown("### 💡 Recommended Actions")
                     recommendations = get_retention_strategies(input_df)
-                    for i, rec in enumerate(recommendations, 1): st.info(f'{i}. {rec}')
+                    for rec in recommendations:
+                        st.info(rec)
 
     if page == "Explain Predictions":
-        # CHANGED: HR Friendly Title and Intro
-        st.header("🧠 AI Model Insights (Manager's Summary)")
-        st.write("You don't need to be a data scientist to understand our AI. Here are the **top factors** the model looks at to predict if someone will leave, and what you should do about them.")
-        
-        st.write("---")
+        st.header("🧠 AI Insights (Manager's Summary)")
+        st.write("Understand what drives your employees to leave, without the data science jargon.")
         
         with st.spinner("Analyzing model insights..."):
             shap_values, X_processed_df = get_shap_explanations(pipeline, df)
             
-            # --- HR LOGIC: Process SHAP values into Insights ---
-            # Calculate mean absolute SHAP values to find importance
-            # shap_values[1] is usually for class 1 (Leaving) in binary classification
             if isinstance(shap_values, list):
                 vals = np.abs(shap_values[1]).mean(0)
             else:
@@ -464,75 +583,61 @@ def main():
             feature_importance.sort_values(by=['Importance'], ascending=False, inplace=True)
             top_3 = feature_importance.head(3)
 
-            # --- Insight Cards Logic ---
             def get_feature_advice(feature_name):
-                # Simplified mapping based on the feature name
                 if 'satisfaction' in feature_name.lower():
-                    return "Employee Morale", "Conduct regular engagement surveys and 1-on-1s."
+                    return "Employee Morale", "Conduct regular engagement surveys."
                 elif 'project' in feature_name.lower():
-                    return "Workload Balance", "Review project allocation to prevent burnout."
+                    return "Workload Balance", "Review project allocations."
                 elif 'time' in feature_name.lower() or 'tenure' in feature_name.lower():
-                    return "Tenure", "Watch for turnover at the 3-5 year mark."
+                    return "Tenure", "Watch for turnover at 3-5 years."
                 elif 'salary' in feature_name.lower():
                     return "Compensation", "Review market rates annually."
                 else:
-                    return "Performance Factor", "Keep track of evaluation scores."
+                    return "Performance", "Track evaluation scores."
 
             c1, c2, c3 = st.columns(3)
-            
             cols = [c1, c2, c3]
             for idx, row in enumerate(top_3.iterrows()):
                 feature = row[1]['Feature']
                 advice_title, advice_text = get_feature_advice(feature)
-                color = "#17B794" # Green for "Safe/Info"
                 
+                card_html = f"""
+                <div class='custom-card' style='text-align: center; height: 100%;'>
+                    <h3 style='color: #17B794; margin-top: 0;'>{advice_title}</h3>
+                    <p style='color: #c9d1d9; font-size: 0.9rem;'>{advice_text}</p>
+                    <small style='color: #8b949e;'>(Source: {feature})</small>
+                </div>
+                """
                 with cols[idx]:
-                    st.markdown(f"""
-                    <div style="background-color: {color}20; padding: 20px; border-radius: 10px; border: 1px solid {color}; text-align: center;">
-                        <h3 style="color: {color}; margin: 0;">{advice_title}</h3>
-                        <h4 style="color: white; margin: 5px 0;">Key Driver</h4>
-                        <p style="color: #ccc; font-size: 14px;">{advice_text}</p>
-                        <p style="color: #888; font-size: 12px; margin-top: 10px;">(Based on: {feature})</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(card_html, unsafe_allow_html=True)
 
-        # --- Hide Technical Details in Expander ---
-        with st.expander("🔧 For Data Scientists: Deep Dive into SHAP Values"):
-            st.write("Below are the raw SHAP (SHapley Additive exPlanations) plots.")
-            st.caption("Bar Chart: Global Feature Importance.")
+        with st.expander("🔧 Technical Deep Dive (SHAP)"):
+            st.write("Below are the raw SHAP plots for data scientists.")
             fig2, ax2 = plt.subplots(); shap.summary_plot(shap_values, X_processed_df, plot_type='bar', show=False)
             st.pyplot(fig2, bbox_inches='tight'); plt.close(fig2)
-            
-            st.write("---")
-            st.caption("Beeswarm Plot: How feature values affect the model output.")
-            with st.expander("How to Read This Chart"):
-                st.markdown("""- **Each dot** is an employee.\n- **Right side** = Increases chance of leaving.\n- **Left side** = Decreases chance.\n- **Red** = High value.\n- **Blue** = Low value.""")
             fig1, ax1 = plt.subplots(); shap.summary_plot(shap_values, X_processed_df, show=False, plot_type='dot')
             st.pyplot(fig1, bbox_inches='tight'); plt.close(fig1)
 
     # ====================================================================
-    # Page: Retention Strategy (HR Friendly + Evaluation Ready)
+    # Page: Retention Strategy (UI Redesigned)
     # ====================================================================
     if page == "Retention Strategy":
-        st.header("🧠 Retention Strategy & Budget")
-        st.markdown("Welcome to the Strategy Center. Here, we don't just predict *who* might leave, we help you decide **how to stop them** in the most cost-effective way.")
+        st.markdown("<h1 style='margin-bottom: 5px;'>🧠 Retention Strategy & Budget</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 30px;'>Data-driven decision support for HR.</p>", unsafe_allow_html=True)
         
-        st.markdown("---")
-        
-        # Section 1: Why they leave (Includes Visible Graph for Evaluation)
+        # Section 1: Root Causes
         analyze_why_people_leave(df)
         
         st.markdown("---")
         
         # Section 2: Budget Planner
+        st.markdown("### 💰 Budget Optimization Tool")
         col1, col2 = st.columns([2, 1])
         with col1:
-            st.write("### 💼 Plan Your Budget")
-            budget = st.number_input("How much budget can you allocate for raises? (₹)", min_value=100000, max_value=10000000, value=1000000, step=50000, help="Enter the total amount in Rupees you are willing to spend on retention efforts.")
-            
+            budget = st.number_input("Total Retention Budget (₹)", min_value=100000, max_value=10000000, value=1000000, step=50000)
         with col2:
-            st.write("### ")
-            optimize_btn = st.button("Generate Retention Plan", type="primary", help="Click to calculate the best use of your budget.")
+            st.write("<br>", unsafe_allow_html=True) # Spacer
+            optimize_btn = st.button("🚀 Generate Plan", type="primary")
             
         if optimize_btn:
             results = plan_retention_budget(df, pipeline, budget)
@@ -540,28 +645,28 @@ def main():
             if results:
                 selected_df, total_cost, total_savings = results
                 
-                st.success("✅ **Plan Generated Successfully!**")
-                st.write("Based on your budget, here is the most cost-effective group to target with raises. Targeting these employees maximizes your savings on replacement costs.")
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.success("✅ **Optimization Complete.** Here is your strategic plan.")
                 
-                # Metrics
+                # Metrics in Cards
                 m1, m2, m3 = st.columns(3)
-                m1.metric("Your Budget", f"₹{budget:,.0f}")
-                m2.metric("Required Investment", f"₹{total_cost:,.0f}", delta=f"{(total_cost/budget)*100:.1f}% of Budget")
-                m3.metric("Estimated Savings", f"₹{total_savings:,.0f}", delta="Money Saved on Hiring")
+                m1.metric("Budget Allocated", f"₹{budget:,.0f}")
+                m2.metric("Investment Needed", f"₹{total_cost:,.0f}", delta=f"{(total_cost/budget)*100:.1f}% Used")
+                m3.metric("Projected Savings", f"₹{total_savings:,.0f}", delta="ROI Positive")
                 
-                st.write("### 📋 Recommended Action List")
-                st.caption("These are the specific employees who should receive a 10% raise. It is cheaper to keep them than to replace them.")
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("### 📋 Actionable Retention List")
+                st.caption("Target these employees with a 10% retention bonus. It is cheaper to retain than to replace.")
                 
                 display_cols = ['Department', 'salary', 'satisfaction_level', 'number_project', 
                                 'attrition_risk', 'intervention_cost', 'net_savings']
-                
                 display_df = selected_df[display_cols].copy()
-                display_df.columns = ['Department', 'Salary Tier', 'Satisfaction', 'Projects', 
-                                     'Risk of Leaving', 'Cost to Retain (Raise)', 'Savings if Retained']
+                display_df.columns = ['Department', 'Tier', 'Satisfaction', 'Projects', 
+                                     'Risk', 'Cost to Retain', 'Savings']
                 
-                display_df['Cost to Retain (Raise)'] = display_df['Cost to Retain (Raise)'].apply(lambda x: f"₹{x:,.0f}")
-                display_df['Savings if Retained'] = display_df['Savings if Retained'].apply(lambda x: f"₹{x:,.0f}")
-                display_df['Risk of Leaving'] = (display_df['Risk of Leaving'] * 100).apply(lambda x: f"{x:.1f}%")
+                display_df['Cost to Retain'] = display_df['Cost to Retain'].apply(lambda x: f"₹{x:,.0f}")
+                display_df['Savings'] = display_df['Savings'].apply(lambda x: f"₹{x:,.0f}")
+                display_df['Risk'] = (display_df['Risk'] * 100).apply(lambda x: f"{x:.0f}%")
                 
                 st.dataframe(display_df, use_container_width=True)
 
