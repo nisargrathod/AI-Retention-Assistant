@@ -9,7 +9,7 @@ import plotly.express as px
 import shap
 import matplotlib.pyplot as plt
 import lightgbm as lgb
-from sklearn.model_model_selection import train_test_split
+from sklearn.model_selection import train_test_split  # FIXED: Removed duplicate 'model_'
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
