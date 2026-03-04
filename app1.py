@@ -9,7 +9,7 @@ import plotly.express as px
 import shap
 import matplotlib.pyplot as plt
 import lightgbm as lgb
-from sklearn.model_selection import train_test_split
+from sklearn.model_model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -171,7 +171,6 @@ def analyze_why_people_leave(df):
     effects['Overwork'] = abs(est_hr.value) * 10 # Scale up for comparison
 
     # --- Rank the Effects ---
-    # Sort dictionary by value
     sorted_effects = sorted(effects.items(), key=lambda item: item[1], reverse=True)
     
     # Define the display logic
@@ -351,7 +350,7 @@ def main():
     with st.sidebar:
         st.title(":green[AI Retention] Assistant")
         st.title(":green[Develop by]-Nisarg Rathod")
-        # CHANGED MENU ITEM: 'Decision Support' -> 'Retention Strategy'
+        # CHANGED MENU ITEM
         page = option_menu(
             menu_title=None,
             options=['Home', 'Vizualizations', 'Prediction', 'Explain Predictions', 'Retention Strategy'],  
@@ -421,26 +420,75 @@ def main():
                     for i, rec in enumerate(recommendations, 1): st.info(f'{i}. {rec}')
 
     if page == "Explain Predictions":
-        st.header("💡 Explaining The Model's Behavior")
-        st.write("This page reveals the key factors our AI model uses to predict employee attrition. It helps us understand the **'why'** behind its decisions, making our AI transparent and trustworthy.")
+        # CHANGED: HR Friendly Title and Intro
+        st.header("🧠 AI Model Insights (Manager's Summary)")
+        st.write("You don't need to be a data scientist to understand our AI. Here are the **top factors** the model looks at to predict if someone will leave, and what you should do about them.")
+        
         st.write("---")
+        
         with st.spinner("Analyzing model insights..."):
             shap_values, X_processed_df = get_shap_explanations(pipeline, df)
-            st.subheader("What are the Biggest Factors Driving Attrition?")
+            
+            # --- HR LOGIC: Process SHAP values into Insights ---
+            # Calculate mean absolute SHAP values to find importance
+            # shap_values[1] is usually for class 1 (Leaving) in binary classification
+            if isinstance(shap_values, list):
+                vals = np.abs(shap_values[1]).mean(0)
+            else:
+                vals = np.abs(shap_values).mean(0)
+            
+            feature_importance = pd.DataFrame(list(zip(X_processed_df.columns, vals)), columns=['Feature','Importance'])
+            feature_importance.sort_values(by=['Importance'], ascending=False, inplace=True)
+            top_3 = feature_importance.head(3)
+
+            # --- Insight Cards Logic ---
+            def get_feature_advice(feature_name):
+                # Simplified mapping based on the feature name
+                if 'satisfaction' in feature_name.lower():
+                    return "Employee Morale", "Conduct regular engagement surveys and 1-on-1s."
+                elif 'project' in feature_name.lower():
+                    return "Workload Balance", "Review project allocation to prevent burnout."
+                elif 'time' in feature_name.lower() or 'tenure' in feature_name.lower():
+                    return "Tenure", "Watch for turnover at the 3-5 year mark."
+                elif 'salary' in feature_name.lower():
+                    return "Compensation", "Review market rates annually."
+                else:
+                    return "Performance Factor", "Keep track of evaluation scores."
+
+            c1, c2, c3 = st.columns(3)
+            
+            cols = [c1, c2, c3]
+            for idx, row in enumerate(top_3.iterrows()):
+                feature = row[1]['Feature']
+                advice_title, advice_text = get_feature_advice(feature)
+                color = "#17B794" # Green for "Safe/Info"
+                
+                with cols[idx]:
+                    st.markdown(f"""
+                    <div style="background-color: {color}20; padding: 20px; border-radius: 10px; border: 1px solid {color}; text-align: center;">
+                        <h3 style="color: {color}; margin: 0;">{advice_title}</h3>
+                        <h4 style="color: white; margin: 5px 0;">Key Driver</h4>
+                        <p style="color: #ccc; font-size: 14px;">{advice_text}</p>
+                        <p style="color: #888; font-size: 12px; margin-top: 10px;">(Based on: {feature})</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        # --- Hide Technical Details in Expander ---
+        with st.expander("🔧 For Data Scientists: Deep Dive into SHAP Values"):
+            st.write("Below are the raw SHAP (SHapley Additive exPlanations) plots.")
+            st.caption("Bar Chart: Global Feature Importance.")
             fig2, ax2 = plt.subplots(); shap.summary_plot(shap_values, X_processed_df, plot_type='bar', show=False)
             st.pyplot(fig2, bbox_inches='tight'); plt.close(fig2)
-            st.write("---"); st.subheader("How Do These Factors Influence Attrition Risk?")
+            
+            st.write("---")
+            st.caption("Beeswarm Plot: How feature values affect the model output.")
             with st.expander("How to Read This Chart"):
-                st.markdown("""- **Each dot** is an employee in our dataset.\n- **Factors are ranked by importance** from top to bottom.\n- The **horizontal position** of a dot shows its impact on the prediction. Dots to the right **increase the risk of leaving**, while dots to the left **decrease the risk**.\n- The **color** of the dot shows the feature's value for that employee. **Red** means a high value, **blue** means a low value.""")
+                st.markdown("""- **Each dot** is an employee.\n- **Right side** = Increases chance of leaving.\n- **Left side** = Decreases chance.\n- **Red** = High value.\n- **Blue** = Low value.""")
             fig1, ax1 = plt.subplots(); shap.summary_plot(shap_values, X_processed_df, show=False, plot_type='dot')
             st.pyplot(fig1, bbox_inches='tight'); plt.close(fig1)
-            st.subheader("Key Insights from the Model:")
-            st.success("**1. Satisfaction is Critical:** Low satisfaction (blue dots) is the strongest single predictor that pushes an employee's attrition risk higher.")
-            st.warning("**2. Workload is a Double-Edged Sword:** Both very high and very low numbers of projects increase attrition risk.")
-            st.info("**3. Tenure Matters:** Employees are more likely to leave around the 4-5 year mark without promotion.")
 
     # ====================================================================
-    # 🆕 Page: Retention Strategy (HR Friendly)
+    # Page: Retention Strategy (HR Friendly)
     # ====================================================================
     if page == "Retention Strategy":
         st.header("🧠 Retention Strategy & Budget")
@@ -448,7 +496,7 @@ def main():
         
         st.markdown("---")
         
-        # Section 1: Why they leave (UPDATED TO INSIGHT CARDS)
+        # Section 1: Why they leave
         analyze_why_people_leave(df)
         
         st.markdown("---")
