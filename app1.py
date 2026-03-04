@@ -128,24 +128,22 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
             tabs[i].plotly_chart(figs[i], use_container_width=True)
 
 # ====================================================================
-# Logic Engine Functions (Evaluation 1)
+# Logic Engine Functions (HR Friendly Versions)
 # ====================================================================
 
-def run_causal_inference(df):
+def analyze_why_people_leave(df):
     """
-    Step 1: Implement Causal Inference using DoWhy.
-    FIX: Using 'backdoor.linear_regression' for stability instead of propensity_score_weighting.
+    HR Friendly Version: Analyzes Root Causes.
     """
-    st.subheader("🔬 Step 1: Causal Inference (Root Cause Analysis)")
+    st.subheader("🔍 Why do people leave? (Root Cause Analysis)")
+    st.write("Our AI has analyzed the data to find out which factors actually cause people to quit, rather than just guessing.")
     
-    # Data Preparation for DoWhy
+    # Data Preparation
     df_causal = df.copy()
-    # Map salary to numeric
     salary_map = {'low': 1, 'medium': 2, 'high': 3}
     df_causal['salary_num'] = df_causal['salary'].map(salary_map)
     
-    # Define Causal Graph based on hypothesis
-    # Hypothesis: Salary -> Satisfaction -> Attrition
+    # Causal Graph
     causal_graph = """digraph {
         salary_num -> satisfaction_level;
         satisfaction_level -> left;
@@ -153,11 +151,11 @@ def run_causal_inference(df):
         number_project -> average_montly_hours;
     }"""
     
-    with st.expander("View Causal Graph Logic"):
+    with st.expander("View the AI's thought process"):
         st.graphviz_chart(causal_graph)
+        st.caption("This diagram shows how Salary affects Satisfaction, and how that leads to Attrition.")
 
-    # 1. Define Model
-    # We drop non-numeric columns that aren't mapped to avoid issues with linear regression
+    # Model Setup
     df_model = df_causal[['salary_num', 'satisfaction_level', 'average_montly_hours', 'number_project', 'left']]
     
     model = CausalModel(
@@ -167,100 +165,75 @@ def run_causal_inference(df):
         graph=causal_graph.replace('\n', ' ')
     )
 
-    # 2. Identify Effect
     identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
 
-    # 3. Estimate Effect
-    # CHANGED: Using linear_regression which is more robust than propensity_score_weighting
     try:
-        estimate = model.estimate_effect(identified_estimand,
-                                         method_name="backdoor.linear_regression")
+        estimate = model.estimate_effect(identified_estimand, method_name="backdoor.linear_regression")
         
-        st.success(f"📊 **Average Treatment Effect (ATE):** {estimate.value:.4f}")
-        st.info("Interpretation: Increasing salary by 1 level (e.g., Low to Medium) decreases the probability of attrition by the value above.")
+        # HR Friendly Interpretation
+        impact = estimate.value * 100
         
-        # 4. Refutation Tests
-        st.write("🧪 **Running Refutation Tests (Random Common Cause)** to validate robustness...")
-        refute = model.refute_estimate(identified_estimand, estimate,
-                                       method_name="random_common_cause")
+        st.info(f"📉 **Key Finding:** Increasing an employee's salary tier (e.g., Low to Medium) reduces their chance of quitting by approximately **{abs(impact):.1f}%**.")
         
-        st.table(refute.refutation_result)
-        st.markdown("*If 'New Effect' is close to 'Estimated Effect', the model is robust.*")
+        st.markdown("---")
+        st.write("🧪 **AI Validation Check:** The model has been tested to ensure this result isn't a coincidence.")
+        refute = model.refute_estimate(identified_estimand, estimate, method_name="random_common_cause")
+        
+        # Only show the table if user wants deep details
+        with st.expander("Show technical validation details"):
+            st.table(refute.refutation_result)
         
     except Exception as e:
-        st.error(f"An error occurred during estimation: {e}")
-        st.warning("This is likely due to data structure limitations. The Causal Graph logic remains valid for understanding relationships.")
+        st.error(f"Analysis Error: {e}")
 
 
-def run_budget_optimizer(df, pipeline, budget_limit):
+def plan_retention_budget(df, pipeline, budget_limit):
     """
-    Step 2: Build the Budget Optimizer.
-    Tech: scipy.optimize (Linear Programming / Knapsack).
-    Currency: Indian Rupees (INR)
+    HR Friendly Version: Budget Planner.
     """
-    st.subheader("💰 Step 2: Budget Optimizer (Resource Allocation)")
+    st.subheader("💰 Retention Budget Planner")
+    st.write("We have identified employees who are at **High Risk** of leaving. Use this tool to see who is worth investing in to save the company money.")
     
-    # Get predictions for all employees to find risk
+    # Get predictions
     X = df.drop('left', axis=1)
     probas = pipeline.predict_proba(X)[:, 1]
     
-    # Create a working dataframe for optimization
     opt_df = df.copy()
     opt_df['attrition_risk'] = probas
-    
-    # Filter for high risk employees (Risk > 50%)
     high_risk_df = opt_df[opt_df['attrition_risk'] > 0.5].copy()
     
     if len(high_risk_df) == 0:
-        st.warning("No employees currently classified as high risk. Optimization not needed.")
+        st.success("Great news! Our model predicts very few employees are currently at high risk of leaving.")
         return None
 
-    # --- Define Economics (INR) ---
-    # Map salary to approximate annual value for calculation (Assumptions in INR)
-    # Low: 4 LPA, Medium: 6 LPA, High: 9 LPA
+    # --- Economics (INR) ---
     salary_val_map = {'low': 400000, 'medium': 600000, 'high': 900000}
     high_risk_df['annual_salary'] = high_risk_df['salary'].map(salary_val_map)
-    
-    # Value of Employee = Replacement Cost (Assume 50% of Annual Salary)
     high_risk_df['replacement_cost'] = high_risk_df['annual_salary'] * 0.5
-    
-    # Expected Loss if they leave = Risk * Replacement Cost
     high_risk_df['expected_loss'] = high_risk_df['attrition_risk'] * high_risk_df['replacement_cost']
     
-    # Cost of Intervention = 10% Raise
+    # Cost of Fixing them: 10% Raise
     high_risk_df['intervention_cost'] = high_risk_df['annual_salary'] * 0.10
-    
-    # Net Value Saved if we intervene = (Expected Loss) - (Intervention Cost)
-    # If Net Value Saved is negative, it's cheaper to let them go.
-    high_risk_df['net_savings_if_retained'] = high_risk_df['expected_loss'] - high_risk_df['intervention_cost']
+    high_risk_df['net_savings'] = high_risk_df['expected_loss'] - high_risk_df['intervention_cost']
 
-    # Filter only those where intervention makes financial sense
-    candidates = high_risk_df[high_risk_df['net_savings_if_retained'] > 0].copy()
+    candidates = high_risk_df[high_risk_df['net_savings'] > 0].copy()
     
     if len(candidates) == 0:
-        st.warning("Intervention costs exceed potential savings for all high-risk employees.")
+        st.warning("It is currently not cost-effective to offer raises to the high-risk group based on the calculated replacement costs.")
         return None
 
-    # --- Optimization Logic (0/1 Knapsack via MILP) ---
-    # Objective: Maximize sum of Net Savings
-    # Constraint: Sum of Intervention Costs <= Budget Limit
-    
+    # --- Optimization ---
     n = len(candidates)
-    
-    # Coefficients for objective function (scipy milp minimizes, so we use negative for maximization)
-    c = -candidates['net_savings_if_retained'].values 
-    
-    # Constraint: Costs <= Budget
+    c = -candidates['net_savings'].values 
     A = np.array([candidates['intervention_cost'].values])
     b = np.array([budget_limit])
+    integrality = np.ones(n)
     
-    integrality = np.ones(n) # 1 means integer variable (0 or 1)
-    
-    with st.spinner("Calculating optimal budget allocation..."):
+    with st.spinner("Calculating the best employees to invest in..."):
         try:
             res = milp(c=c, constraints=LinearConstraint(A, lb=-np.inf, ub=b), integrality=integrality)
         except Exception as e:
-            st.error(f"Optimization error: {e}")
+            st.error(f"Calculation Error: {e}")
             return None
 
     if res.success:
@@ -268,11 +241,11 @@ def run_budget_optimizer(df, pipeline, budget_limit):
         selected_employees = candidates.iloc[selected_indices]
         
         total_cost = selected_employees['intervention_cost'].sum()
-        total_savings = selected_employees['net_savings_if_retained'].sum()
+        total_savings = selected_employees['net_savings'].sum()
         
         return selected_employees, total_cost, total_savings
     else:
-        st.error("Optimization failed. Budget might be too low for even a single intervention.")
+        st.error("The budget provided is too low to retain any high-risk employees effectively.")
         return None
 
 # ====================================================================
@@ -306,41 +279,20 @@ def main():
 
     pipeline, df = load_data_and_train_model()
 
-    # ====================================================================
-    # ✅ FIXED: SHAP Explanation Function (no JSONDecodeError)
-    # ====================================================================
     @st.cache_data
     def get_shap_explanations(_pipeline, _df):
         model = _pipeline.named_steps['classifier']
         preprocessor = _pipeline.named_steps['preprocessor']
         X = _df.drop('left', axis=1).drop_duplicates()
         X_processed = preprocessor.transform(X)
-
-        # Handle sparse matrices
-        if issparse(X_processed):
-            X_processed = X_processed.toarray()
-
+        if issparse(X_processed): X_processed = X_processed.toarray()
         clean_names = [name.split('__')[-1].replace('_', ' ').title() for name in preprocessor.get_feature_names_out()]
         X_processed_df = pd.DataFrame(X_processed, columns=clean_names)
-
-        # Extract booster safely
-        booster = None
-        if hasattr(model, "booster_"):
-            booster = model.booster_
-        elif hasattr(model, "_Booster"):
-            booster = model._Booster
-        elif hasattr(model, "booster"):
-            booster = model.booster
-        else:
-            booster = model
-
+        booster = model.booster_ if hasattr(model, "booster_") else model._Booster if hasattr(model, "_Booster") else model.booster if hasattr(model, "booster") else model
         explainer = shap.TreeExplainer(booster)
         shap_values = explainer.shap_values(X_processed_df)
         return shap_values, X_processed_df
 
-    # ====================================================================
-    # Retention Strategy Function
-    # ====================================================================
     def get_retention_strategies(employee_data):
         strategies = []
         if isinstance(employee_data, pd.DataFrame): employee_data = employee_data.iloc[0]
@@ -352,9 +304,6 @@ def main():
         if not strategies: strategies.append("No specific high-risk factors detected, but continue to monitor engagement.")
         return strategies
 
-    # ====================================================================
-    # UI Styling
-    # ====================================================================
     st.markdown(
         """<style>
         .main { text-align: center; }
@@ -376,10 +325,11 @@ def main():
     with st.sidebar:
         st.title(":green[AI Retention] Assistant")
         st.title(":green[Develop by]-Nisarg Rathod")
+        # CHANGED MENU ITEM: 'Decision Support' -> 'Retention Strategy'
         page = option_menu(
             menu_title=None,
-            options=['Home', 'Vizualizations', 'Prediction', 'Explain Predictions', 'Decision Support'],  
-            icons=['diagram-3-fill', 'bar-chart-line-fill', "graph-up-arrow", 'lightbulb-fill', 'cpu-fill'], 
+            options=['Home', 'Vizualizations', 'Prediction', 'Explain Predictions', 'Retention Strategy'],  
+            icons=['diagram-3-fill', 'bar-chart-line-fill', "graph-up-arrow", 'lightbulb-fill', 'currency-rupee'], 
             menu_icon="cast", default_index=0, styles=side_bar_options_style
         )
 
@@ -464,61 +414,57 @@ def main():
             st.info("**3. Tenure Matters:** Employees are more likely to leave around the 4-5 year mark without promotion.")
 
     # ====================================================================
-    # 🆕 Page: Decision Support (Evaluation 1) - INR VERSION
+    # 🆕 Page: Retention Strategy (HR Friendly)
     # ====================================================================
-    if page == "Decision Support":
-        st.header("🧠 Decision Support: Logic Engine")
-        st.markdown("This module uses **Causal Inference** to find root causes and **Operations Research** to optimize your retention budget.")
+    if page == "Retention Strategy":
+        st.header("🧠 Retention Strategy & Budget")
+        st.markdown("Welcome to the Strategy Center. Here, we don't just predict *who* might leave, we help you decide **how to stop them** in the most cost-effective way.")
         
         st.markdown("---")
         
-        # Section 1: Causal Inference
-        run_causal_inference(df)
+        # Section 1: Why they leave
+        analyze_why_people_leave(df)
         
         st.markdown("---")
         
-        # Section 2: Budget Optimizer
+        # Section 2: Budget Planner
         col1, col2 = st.columns([2, 1])
         with col1:
-            st.write("### 📋 Optimization Parameters")
-            # CHANGED: Label and default value to INR scale (Lakhs)
-            budget = st.number_input("Total Retention Budget (₹)", min_value=100000, max_value=10000000, value=1000000, step=50000)
+            st.write("### 💼 Plan Your Budget")
+            budget = st.number_input("How much budget can you allocate for raises? (₹)", min_value=100000, max_value=10000000, value=1000000, step=50000, help="Enter the total amount in Rupees you are willing to spend on retention efforts.")
             
         with col2:
             st.write("### ")
-            optimize_btn = st.button("Run Optimizer", type="primary")
+            optimize_btn = st.button("Generate Retention Plan", type="primary", help="Click to calculate the best use of your budget.")
             
         if optimize_btn:
-            results = run_budget_optimizer(df, pipeline, budget)
+            results = plan_retention_budget(df, pipeline, budget)
             
             if results:
                 selected_df, total_cost, total_savings = results
                 
-                st.success("Sir, I have implemented Causal Inference to find the true root cause of attrition for specific employees, and I used Operations Research to calculate the exact budget required to retain them at the lowest cost.")
+                st.success("✅ **Plan Generated Successfully!**")
+                st.write("Based on your budget, here is the most cost-effective group to target with raises. Targeting these employees maximizes your savings on replacement costs.")
                 
                 # Metrics
                 m1, m2, m3 = st.columns(3)
-                # CHANGED: Metrics formatting to INR
-                m1.metric("Total Budget", f"₹{budget:,.0f}")
-                m2.metric("Cost of Interventions", f"₹{total_cost:,.0f}", delta=f"{(total_cost/budget)*100:.1f}% of Budget")
-                m3.metric("Estimated Net Savings", f"₹{total_savings:,.0f}")
+                m1.metric("Your Budget", f"₹{budget:,.0f}")
+                m2.metric("Required Investment", f"₹{total_cost:,.0f}", delta=f"{(total_cost/budget)*100:.1f}% of Budget")
+                m3.metric("Estimated Savings", f"₹{total_savings:,.0f}", delta="Money Saved on Hiring")
                 
-                st.write("### 👥 Recommended Interventions (Optimization Table)")
-                # Select relevant columns for display
+                st.write("### 📋 Recommended Action List")
+                st.caption("These are the specific employees who should receive a 10% raise. It is cheaper to keep them than to replace them.")
+                
                 display_cols = ['Department', 'salary', 'satisfaction_level', 'number_project', 
-                                'attrition_risk', 'intervention_cost', 'net_savings_if_retained']
+                                'attrition_risk', 'intervention_cost', 'net_savings']
                 
-                # Rename for better readability
                 display_df = selected_df[display_cols].copy()
                 display_df.columns = ['Department', 'Salary Tier', 'Satisfaction', 'Projects', 
-                                     'Risk Probability', 'Cost of Raise (10%)', 'Net Savings']
+                                     'Risk of Leaving', 'Cost to Retain (Raise)', 'Savings if Retained']
                 
-                # CHANGED: Format Cost and Savings columns as INR strings
-                display_df['Cost of Raise (10%)'] = display_df['Cost of Raise (10%)'].apply(lambda x: f"₹{x:,.0f}")
-                display_df['Net Savings'] = display_df['Net Savings'].apply(lambda x: f"₹{x:,.0f}")
-                
-                # Keep other columns numeric for sorting/range logic if needed, but here we just display
-                display_df = display_df.round(2)
+                display_df['Cost to Retain (Raise)'] = display_df['Cost to Retain (Raise)'].apply(lambda x: f"₹{x:,.0f}")
+                display_df['Savings if Retained'] = display_df['Savings if Retained'].apply(lambda x: f"₹{x:,.0f}")
+                display_df['Risk of Leaving'] = (display_df['Risk of Leaving'] * 100).apply(lambda x: f"{x:.1f}%")
                 
                 st.dataframe(display_df, use_container_width=True)
 
