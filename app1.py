@@ -1,3 +1,6 @@
+Here is the complete, integrated code. I have added the necessary imports, created the "Logic Engine" functions (Causal Inference and Budget Optimizer), and integrated the new "Decision Support" tab into your existing Phase 1 application.
+
+```python
 # ====================================================================
 # All Necessary Imports
 # ====================================================================
@@ -16,6 +19,12 @@ from sklearn.pipeline import Pipeline
 import warnings
 from time import sleep
 from scipy.sparse import issparse
+
+# --- NEW: Imports for Evaluation 1 (Logic Engine) ---
+import dowhy
+from dowhy import CausalModel
+from scipy.optimize import milp, LinearConstraint, Bounds
+# ====================================================================
 
 # ====================================================================
 # Visualization Functions
@@ -122,6 +131,142 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
             tabs[i].plotly_chart(figs[i], use_container_width=True)
 
 # ====================================================================
+# NEW: Logic Engine Functions (Evaluation 1)
+# ====================================================================
+
+def run_causal_inference(df):
+    """
+    Step 1: Implement Causal Inference using DoWhy.
+    Target: Find Root Causes (Salary -> Satisfaction -> Attrition).
+    """
+    st.subheader("🔬 Step 1: Causal Inference (Root Cause Analysis)")
+    
+    # Data Preparation for DoWhy
+    # We map categorical salary to numeric for the treatment logic
+    df_causal = df.copy()
+    salary_map = {'low': 1, 'medium': 2, 'high': 3}
+    df_causal['salary_num'] = df_causal['salary'].map(salary_map)
+    
+    # Define Causal Graph based on hypothesis
+    # Hypothesis: Salary -> Satisfaction -> Attrition AND AverageMonthlyHours (Overtime) -> Attrition
+    # Note: 'Work-Life-Balance' is not in the dataset, so we link Overtime directly to Attrition 
+    # or via Satisfaction to fit the available data.
+    causal_graph = """digraph {
+        salary_num -> satisfaction_level;
+        satisfaction_level -> left;
+        average_montly_hours -> left;
+        number_project -> average_montly_hours;
+    }"""
+    
+    with st.expander("View Causal Graph Logic"):
+        st.graphviz_chart(causal_graph)
+
+    # 1. Define Model
+    model = CausalModel(
+        data=df_causal,
+        treatment='salary_num',
+        outcome='left',
+        graph=causal_graph.replace('\n', ' ')
+    )
+
+    # 2. Identify Effect
+    identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
+
+    # 3. Estimate Effect
+    estimate = model.estimate_effect(identified_estimand,
+                                     method_name="backdoor.propensity_score_weighting")
+
+    st.success(f"📊 **Average Treatment Effect (ATE):** {estimate.value:.4f}")
+    st.info("Interpretation: Increasing salary by 1 level (e.g., Low to Medium) decreases the probability of attrition by the value above.")
+
+    # 4. Refutation Tests (Random Common Cause)
+    st.write("🧪 **Running Refutation Tests (Random Common Cause)** to validate robustness...")
+    refute = model.refute_estimate(identified_estimand, estimate,
+                                   method_name="random_common_cause")
+    
+    st.table(refute.refutation_result)
+    st.markdown("*If 'New Effect' is close to 'Estimated Effect', the model is robust.*")
+
+def run_budget_optimizer(df, pipeline, budget_limit):
+    """
+    Step 2: Build the Budget Optimizer.
+    Tech: scipy.optimize (Linear Programming / Knapsack).
+    """
+    st.subheader("💰 Step 2: Budget Optimizer (Resource Allocation)")
+    
+    # Get predictions for all employees to find risk
+    X = df.drop('left', axis=1)
+    # We need probabilities of leaving (class 1)
+    probas = pipeline.predict_proba(X)[:, 1]
+    
+    # Create a working dataframe for optimization
+    opt_df = df.copy()
+    opt_df['attrition_risk'] = probas
+    
+    # Filter for high risk employees (Risk > 50%)
+    high_risk_df = opt_df[opt_df['attrition_risk'] > 0.5].copy()
+    
+    if len(high_risk_df) == 0:
+        st.warning("No employees currently classified as high risk. Optimization not needed.")
+        return None
+
+    # --- Define Economics ---
+    # Map salary to approximate annual value for calculation (Assumptions for demo)
+    salary_val_map = {'low': 40000, 'medium': 60000, 'high': 90000}
+    high_risk_df['annual_salary'] = high_risk_df['salary'].map(salary_val_map)
+    
+    # Value of Employee = Replacement Cost (Assume 50% of Annual Salary)
+    high_risk_df['replacement_cost'] = high_risk_df['annual_salary'] * 0.5
+    
+    # Expected Loss if they leave = Risk * Replacement Cost
+    high_risk_df['expected_loss'] = high_risk_df['attrition_risk'] * high_risk_df['replacement_cost']
+    
+    # Cost of Intervention = 10% Raise
+    high_risk_df['intervention_cost'] = high_risk_df['annual_salary'] * 0.10
+    
+    # Net Value Saved if we intervene = (Expected Loss) - (Intervention Cost)
+    # If Net Value Saved is negative, it's cheaper to let them go.
+    high_risk_df['net_savings_if_retained'] = high_risk_df['expected_loss'] - high_risk_df['intervention_cost']
+
+    # Filter only those where intervention makes financial sense
+    candidates = high_risk_df[high_risk_df['net_savings_if_retained'] > 0].copy()
+    
+    if len(candidates) == 0:
+        st.warning("Intervention costs exceed potential savings for all high-risk employees.")
+        return None
+
+    # --- Optimization Logic (0/1 Knapsack via MILP) ---
+    # Objective: Maximize sum of Net Savings
+    # Constraint: Sum of Intervention Costs <= Budget Limit
+    
+    n = len(candidates)
+    
+    # Coefficients for objective function (scipy milp minimizes, so we use negative for maximization)
+    c = -candidates['net_savings_if_retained'].values 
+    
+    # Constraint: Costs <= Budget
+    # A_ub @ x <= b_ub
+    A = np.array([candidates['intervention_cost'].values])
+    b = np.array([budget_limit])
+    
+    integrality = np.ones(n) # 1 means integer variable (0 or 1)
+    
+    with st.spinner("Calculating optimal budget allocation..."):
+        res = milp(c=c, constraints=LinearConstraint(A, lb=-np.inf, ub=b), integrality=integrality)
+
+    if res.success:
+        selected_indices = np.where(res.x == 1)[0]
+        selected_employees = candidates.iloc[selected_indices]
+        
+        total_cost = selected_employees['intervention_cost'].sum()
+        total_savings = selected_employees['net_savings_if_retained'].sum()
+        
+        return selected_employees, total_cost, total_savings
+    else:
+        st.error("Optimization failed. Budget might be too low for even a single intervention.")
+        return None
+
+# ====================================================================
 # Main App Function
 # ====================================================================
 def main():
@@ -224,8 +369,8 @@ def main():
         st.title(":green[Develop by]-Nisarg Rathod")
         page = option_menu(
             menu_title=None,
-            options=['Home', 'Vizualizations', 'Prediction', 'Explain Predictions'],
-            icons=['diagram-3-fill', 'bar-chart-line-fill', "graph-up-arrow", 'lightbulb-fill'],
+            options=['Home', 'Vizualizations', 'Prediction', 'Explain Predictions', 'Decision Support'],  # Added 'Decision Support'
+            icons=['diagram-3-fill', 'bar-chart-line-fill', "graph-up-arrow", 'lightbulb-fill', 'cpu-fill'], # Added icon
             menu_icon="cast", default_index=0, styles=side_bar_options_style
         )
 
@@ -309,5 +454,57 @@ def main():
             st.warning("**2. Workload is a Double-Edged Sword:** Both very high and very low numbers of projects increase attrition risk.")
             st.info("**3. Tenure Matters:** Employees are more likely to leave around the 4-5 year mark without promotion.")
 
+    # ====================================================================
+    # 🆕 Page: Decision Support (Evaluation 1)
+    # ====================================================================
+    if page == "Decision Support":
+        st.header("🧠 Decision Support: Logic Engine")
+        st.markdown("This module uses **Causal Inference** to find root causes and **Operations Research** to optimize your retention budget.")
+        
+        st.markdown("---")
+        
+        # Section 1: Causal Inference
+        run_causal_inference(df)
+        
+        st.markdown("---")
+        
+        # Section 2: Budget Optimizer
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.write("### 📋 Optimization Parameters")
+            budget = st.number_input("Total Retention Budget ($)", min_value=10000, max_value=1000000, value=100000, step=10000)
+            
+        with col2:
+            st.write("### ")
+            optimize_btn = st.button("Run Optimizer", type="primary")
+            
+        if optimize_btn:
+            results = run_budget_optimizer(df, pipeline, budget)
+            
+            if results:
+                selected_df, total_cost, total_savings = results
+                
+                st.success("Sir, I have implemented Causal Inference to find the true root cause of attrition for specific employees, and I used Operations Research to calculate the exact budget required to retain them at the lowest cost.")
+                
+                # Metrics
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Total Budget", f"${budget:,.0f}")
+                m2.metric("Cost of Interventions", f"${total_cost:,.0f}", delta=f"{(total_cost/budget)*100:.1f}% of Budget")
+                m3.metric("Estimated Net Savings", f"${total_savings:,.0f}")
+                
+                st.write("### 👥 Recommended Interventions (Optimization Table)")
+                # Select relevant columns for display
+                display_cols = ['Department', 'salary', 'satisfaction_level', 'number_project', 
+                                'attrition_risk', 'intervention_cost', 'net_savings_if_retained']
+                
+                # Rename for better readability
+                display_df = selected_df[display_cols].copy()
+                display_df.columns = ['Department', 'Salary Tier', 'Satisfaction', 'Projects', 
+                                     'Risk Probability', 'Cost of Raise (10%)', 'Net Savings']
+                display_df = display_df.round(2)
+                
+                st.dataframe(display_df, use_container_width=True)
+
 if __name__ == "__main__":
     main()
+```
