@@ -196,6 +196,7 @@ def run_budget_optimizer(df, pipeline, budget_limit):
     """
     Step 2: Build the Budget Optimizer.
     Tech: scipy.optimize (Linear Programming / Knapsack).
+    Currency: Indian Rupees (INR)
     """
     st.subheader("💰 Step 2: Budget Optimizer (Resource Allocation)")
     
@@ -214,9 +215,10 @@ def run_budget_optimizer(df, pipeline, budget_limit):
         st.warning("No employees currently classified as high risk. Optimization not needed.")
         return None
 
-    # --- Define Economics ---
-    # Map salary to approximate annual value for calculation (Assumptions for demo)
-    salary_val_map = {'low': 40000, 'medium': 60000, 'high': 90000}
+    # --- Define Economics (INR) ---
+    # Map salary to approximate annual value for calculation (Assumptions in INR)
+    # Low: 4 LPA, Medium: 6 LPA, High: 9 LPA
+    salary_val_map = {'low': 400000, 'medium': 600000, 'high': 900000}
     high_risk_df['annual_salary'] = high_risk_df['salary'].map(salary_val_map)
     
     # Value of Employee = Replacement Cost (Assume 50% of Annual Salary)
@@ -462,7 +464,7 @@ def main():
             st.info("**3. Tenure Matters:** Employees are more likely to leave around the 4-5 year mark without promotion.")
 
     # ====================================================================
-    # 🆕 Page: Decision Support (Evaluation 1)
+    # 🆕 Page: Decision Support (Evaluation 1) - INR VERSION
     # ====================================================================
     if page == "Decision Support":
         st.header("🧠 Decision Support: Logic Engine")
@@ -479,7 +481,8 @@ def main():
         col1, col2 = st.columns([2, 1])
         with col1:
             st.write("### 📋 Optimization Parameters")
-            budget = st.number_input("Total Retention Budget ($)", min_value=10000, max_value=1000000, value=100000, step=10000)
+            # CHANGED: Label and default value to INR scale (Lakhs)
+            budget = st.number_input("Total Retention Budget (₹)", min_value=100000, max_value=10000000, value=1000000, step=50000)
             
         with col2:
             st.write("### ")
@@ -490,13 +493,15 @@ def main():
             
             if results:
                 selected_df, total_cost, total_savings = results
-            
+                
+                st.success("Sir, I have implemented Causal Inference to find the true root cause of attrition for specific employees, and I used Operations Research to calculate the exact budget required to retain them at the lowest cost.")
                 
                 # Metrics
                 m1, m2, m3 = st.columns(3)
-                m1.metric("Total Budget", f"${budget:,.0f}")
-                m2.metric("Cost of Interventions", f"${total_cost:,.0f}", delta=f"{(total_cost/budget)*100:.1f}% of Budget")
-                m3.metric("Estimated Net Savings", f"${total_savings:,.0f}")
+                # CHANGED: Metrics formatting to INR
+                m1.metric("Total Budget", f"₹{budget:,.0f}")
+                m2.metric("Cost of Interventions", f"₹{total_cost:,.0f}", delta=f"{(total_cost/budget)*100:.1f}% of Budget")
+                m3.metric("Estimated Net Savings", f"₹{total_savings:,.0f}")
                 
                 st.write("### 👥 Recommended Interventions (Optimization Table)")
                 # Select relevant columns for display
@@ -507,6 +512,12 @@ def main():
                 display_df = selected_df[display_cols].copy()
                 display_df.columns = ['Department', 'Salary Tier', 'Satisfaction', 'Projects', 
                                      'Risk Probability', 'Cost of Raise (10%)', 'Net Savings']
+                
+                # CHANGED: Format Cost and Savings columns as INR strings
+                display_df['Cost of Raise (10%)'] = display_df['Cost of Raise (10%)'].apply(lambda x: f"₹{x:,.0f}")
+                display_df['Net Savings'] = display_df['Net Savings'].apply(lambda x: f"₹{x:,.0f}")
+                
+                # Keep other columns numeric for sorting/range logic if needed, but here we just display
                 display_df = display_df.round(2)
                 
                 st.dataframe(display_df, use_container_width=True)
