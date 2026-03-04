@@ -213,11 +213,26 @@ def analyze_why_people_leave(df):
             </div>
             """, unsafe_allow_html=True)
 
-    # Validation (Hidden)
+    # --- UPDATED VALIDATION SECTION (Placebo Added) ---
     with st.expander("Show Technical Validation (Refutation Tests)"):
-        st.write("AI Model Confidence Checks (Random Common Cause):")
-        refute = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="random_common_cause")
-        st.table(refute.refutation_result)
+        st.write("### 1. Random Common Cause Test")
+        st.caption("Does the effect change when we add a random common cause? (It shouldn't).")
+        try:
+            refute_rcc = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="random_common_cause")
+            st.table(refute_rcc.refutation_result)
+        except Exception as e:
+            st.error(f"Error running Random Common Cause: {e}")
+        
+        st.write("---")
+        
+        st.write("### 2. Placebo Treatment Refuter")
+        st.caption("Does the model find an effect when we replace the treatment with random noise? (It shouldn't).")
+        try:
+            # This validates the "Scientific Soundness" requirement
+            refute_placebo = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="placebo_treatment_refuter")
+            st.table(refute_placebo.refutation_result)
+        except Exception as e:
+            st.warning(f"Placebo test could not run on this specific data structure: {e}")
 
 
 def plan_retention_budget(df, pipeline, budget_limit):
