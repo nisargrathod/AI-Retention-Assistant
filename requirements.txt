@@ -7,5 +7,7 @@ shap
 matplotlib
 lightgbm
 scikit-learn
-scipy
-lifelines
+scipy>=1.9.0
+dowhy
+networkx
+graphviz
