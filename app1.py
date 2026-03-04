@@ -133,20 +133,16 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
 
 def analyze_why_people_leave(df):
     """
-    HR Friendly Version: Visual Bar Chart instead of Graphviz.
+    HR Friendly Version: Insight Cards (No Graphs).
     """
     st.subheader("🔍 Why do people leave? (Root Cause Analysis)")
-    st.write("Our AI has analyzed the data to find out which factors actually cause people to quit.")
+    st.write("Our AI has analyzed the data and ranked the **Top 3 Reasons** why employees quit. Here is what matters most:")
     
-    # We still need the Causal Model math to get the "True Effect", 
-    # but we will VISUALIZE the result simply.
-    
-    # Data Preparation
+    # 1. Run Causal Logic (Hidden Math)
     df_causal = df.copy()
     salary_map = {'low': 1, 'medium': 2, 'high': 3}
     df_causal['salary_num'] = df_causal['salary'].map(salary_map)
     
-    # Causal Graph (Hidden Logic)
     causal_graph = """digraph {
         salary_num -> satisfaction_level;
         satisfaction_level -> left;
@@ -154,78 +150,67 @@ def analyze_why_people_leave(df):
         number_project -> average_montly_hours;
     }"""
     
-    # Model Setup
     df_model = df_causal[['salary_num', 'satisfaction_level', 'average_montly_hours', 'number_project', 'left']]
     
-    model = CausalModel(
-        data=df_model,
-        treatment='salary_num',
-        outcome='left',
-        graph=causal_graph.replace('\n', ' ')
-    )
+    # --- Calculate Effects (Logic) ---
+    effects = {}
+    
+    # Salary Effect
+    model_sal = CausalModel(data=df_model, treatment='salary_num', outcome='left', graph=causal_graph.replace('\n', ' '))
+    est_sal = model_sal.estimate_effect(model_sal.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
+    effects['Salary'] = abs(est_sal.value)
+    
+    # Satisfaction Effect
+    model_sat = CausalModel(data=df_model, treatment='satisfaction_level', outcome='left', graph=causal_graph.replace('\n', ' '))
+    est_sat = model_sat.estimate_effect(model_sat.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
+    effects['Satisfaction'] = abs(est_sat.value)
+    
+    # Hours Effect
+    model_hr = CausalModel(data=df_model, treatment='average_montly_hours', outcome='left', graph=causal_graph.replace('\n', ' '))
+    est_hr = model_hr.estimate_effect(model_hr.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
+    effects['Overwork'] = abs(est_hr.value) * 10 # Scale up for comparison
 
-    identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
+    # --- Rank the Effects ---
+    # Sort dictionary by value
+    sorted_effects = sorted(effects.items(), key=lambda item: item[1], reverse=True)
+    
+    # Define the display logic
+    def get_display_info(rank, factor, value):
+        if rank == 1:
+            color = "#FF4B4B" # Red
+            status = "CRITICAL DRIVER"
+            advice = "This is the #1 reason people leave. Focus here first."
+        elif rank == 2:
+            color = "#FFA500" # Orange
+            status = "MAJOR FACTOR"
+            advice = "Important to address, but secondary to the #1 driver."
+        else:
+            color = "#FFD700" # Yellow/Gold
+            status = "MODERATE FACTOR"
+            advice = "Monitor this, but it is not the main cause of attrition."
+            
+        return color, status, advice
 
-    try:
-        # 1. Calculate the Salary Effect
-        estimate_salary = model.estimate_effect(identified_estimand, method_name="backdoor.linear_regression")
-        salary_impact = abs(estimate_salary.value) * 100
+    # --- Display Insight Cards ---
+    c1, c2, c3 = st.columns(3)
+    
+    for idx, (col, factor_value) in enumerate(sorted_effects):
+        color, status, advice = get_display_info(idx + 1, col, factor_value)
         
-        # 2. Calculate Satisfaction Effect (We change treatment to satisfaction)
-        model_sat = CausalModel(
-            data=df_model,
-            treatment='satisfaction_level',
-            outcome='left',
-            graph=causal_graph.replace('\n', ' ')
-        )
-        est_sat = model_sat.estimate_effect(model_sat.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
-        sat_impact = abs(est_sat.value) * 100
+        with [c1, c2, c3][idx]:
+            st.markdown(f"""
+            <div style="background-color: {color}20; padding: 20px; border-radius: 10px; border: 1px solid {color}; text-align: center;">
+                <h2 style="color: {color}; margin: 0;">#{idx+1} {col}</h2>
+                <h4 style="color: white; margin: 10px 0;">{status}</h4>
+                <p style="color: #ccc; font-size: 14px;">{advice}</p>
+            </div>
+            """, unsafe_allow_html=True)
 
-        # 3. Calculate Hours Effect
-        model_hours = CausalModel(
-            data=df_model,
-            treatment='average_montly_hours',
-            outcome='left',
-            graph=causal_graph.replace('\n', ' ')
-        )
-        est_hours = model_hours.estimate_effect(model_hours.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
-        # Normalize hours impact for comparison (divide by 100 as hours are 100-300)
-        hours_impact = (abs(est_hours.value) * 1000) 
-
-        # 4. Create a Simple DataFrame for the Bar Chart
-        impact_data = {
-            'Factor': ['Salary Level', 'Satisfaction', 'Overwork (Hours)'],
-            'Impact on Attrition Risk (%)': [salary_impact, sat_impact, hours_impact]
-        }
-        viz_df = pd.DataFrame(impact_data)
-        
-        # 5. Plot the Bar Chart
-        fig = px.bar(
-            viz_df, 
-            x='Impact on Attrition Risk (%)', 
-            y='Factor', 
-            orientation='h',
-            title="Main Drivers of Employee Attrition",
-            color='Impact on Attrition Risk (%)',
-            color_continuous_scale='Reds',
-            template="plotly_dark",
-            text='Impact on Attrition Risk (%)'
-        )
-        fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-        fig.update_layout(yaxis={'categoryorder':'total ascending'})
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.info(f"📉 **Key Insight:** Increasing **Satisfaction** has the highest impact on reducing attrition, followed by **Salary** improvements.")
-
-        # 6. Validation (Hidden by default)
-        with st.expander("Show Technical Validation"):
-            st.write("The model has been refuted to ensure accuracy.")
-            refute = model.refute_estimate(identified_estimand, estimate_salary, method_name="random_common_cause")
-            st.table(refute.refutation_result)
-        
-    except Exception as e:
-        st.error(f"Analysis Error: {e}")
+    # Validation (Hidden)
+    with st.expander("Show Technical Validation"):
+        st.write("AI Model Confidence Checks:")
+        refute = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="random_common_cause")
+        st.table(refute.refutation_result)
 
 
 def plan_retention_budget(df, pipeline, budget_limit):
@@ -463,7 +448,7 @@ def main():
         
         st.markdown("---")
         
-        # Section 1: Why they leave (UPDATED TO BAR CHART)
+        # Section 1: Why they leave (UPDATED TO INSIGHT CARDS)
         analyze_why_people_leave(df)
         
         st.markdown("---")
