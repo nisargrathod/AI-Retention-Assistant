@@ -468,8 +468,8 @@ def main():
         
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown("""
-        <div style='padding: 20px; text-align: center; color: #8b949e; font-size: 0.9rem;'>
-             Developed by<br><strong style="font-size:1.1rem;">Nisarg Rathod</strong>
+        <div style='padding: 20px; text-align: center; color: #8b949e; font-size: 1rem;'>
+             Developed by<br><strong style="font-size:1.5rem;">Nisarg Rathod</strong>
         </div>
         """, unsafe_allow_html=True)
 
