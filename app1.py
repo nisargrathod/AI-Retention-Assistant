@@ -448,7 +448,7 @@ def main():
         st.markdown("""
         <div style='padding: 20px; text-align: center;'>
             <h1 style='font-size: 1.8rem; color: #17B794; margin-bottom: 0;'>AI Retention</h1>
-            <p style='color: #8b949e; font-size: 0.9rem; margin-top: 5px;'>Assistant Dashboard</p>
+            <p style='color: #8b949e; font-size: 1rem; margin-top: 5px;'>Assistant Dashboard</p>
         </div>
         <hr style='border-color: #30363d; margin: 20px 0;'>
         """, unsafe_allow_html=True)
