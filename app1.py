@@ -309,7 +309,7 @@ def analyze_why_people_leave(df):
             st.markdown(card_html, unsafe_allow_html=True)
 
     # --- CLEAN VALIDATION SECTION (Hides Errors) ---
-    with st.expander("🔧 Technical Validation (For Evaluation)"):
+    with st.expander("🔧 Technical Validation"):
         st.write("### 1. Random Common Cause Test")
         try:
             refute_rcc = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="random_common_cause")
@@ -468,7 +468,7 @@ def main():
         
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown("""
-        <div style='padding: 20px; text-align: center; color: #8b949e; font-size: 0.8rem;'>
+        <div style='padding: 20px; text-align: center; color: #8b949e; font-size: 0.10rem;'>
             Developed by<br><strong>Nisarg Rathod</strong>
         </div>
         """, unsafe_allow_html=True)
@@ -575,7 +575,7 @@ def main():
 
     if page == "Explain Predictions":
         st.header("🧠 AI Insights (Manager's Summary)")
-        st.write("Understand what drives your employees to leave, without the data science jargon.")
+        st.write("Understand the key reasons why employees decide to leave.")
         
         with st.spinner("Analyzing model insights..."):
             shap_values, X_processed_df = get_shap_explanations(pipeline, df)
@@ -618,7 +618,7 @@ def main():
                     st.markdown(card_html, unsafe_allow_html=True)
 
         with st.expander("🔧 Technical Deep Dive (SHAP)"):
-            st.write("Below are the raw SHAP plots for data scientists.")
+            st.write("The following SHAP plots highlight the key factors that affect employee attrition.")
             fig2, ax2 = plt.subplots(); shap.summary_plot(shap_values, X_processed_df, plot_type='bar', show=False)
             st.pyplot(fig2, bbox_inches='tight'); plt.close(fig2)
             fig1, ax1 = plt.subplots(); shap.summary_plot(shap_values, X_processed_df, show=False, plot_type='dot')
