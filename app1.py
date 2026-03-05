@@ -468,7 +468,7 @@ def main():
         
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown("""
-        <div style='padding: 20px; text-align: center; color: #8b949e; font-size: 0.1rem;'>
+        <div style='padding: 20px; text-align: center; color: #8b949e; font-size: 0.15rem;'>
             Developed by<br><strong>Nisarg Rathod</strong>
         </div>
         """, unsafe_allow_html=True)
