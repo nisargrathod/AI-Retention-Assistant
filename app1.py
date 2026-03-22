@@ -395,7 +395,7 @@ def run_groq_consultant(employee_name, department, root_cause, suggestion, cost)
     Step 2: Integrate Groq (The Consultant)
     """
     st.subheader("🤖 AI HR Consultant (GenAI)")
-    st.write("Using Groq Cloud (Llama 3 70B) to generate professional communication based on the Logic Engine's findings.")
+    st.write("Using Groq Cloud (Llama 3.3) to generate professional communication based on the Logic Engine's findings.")
     
     # 1. Initialize LLM (Groq Cloud - Fast & Free)
     try:
@@ -408,7 +408,7 @@ def run_groq_consultant(employee_name, department, root_cause, suggestion, cost)
 
         llm = ChatGroq(
             groq_api_key=api_key,
-            model_name="llama3-70b-8192", # UPDATED MODEL NAME
+            model_name="llama-3.3-70b-versatile", # UPDATED TO Llama 3.3
             temperature=0.7
         )
     except Exception as e:
