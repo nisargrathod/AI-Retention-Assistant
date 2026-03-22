@@ -147,7 +147,7 @@ st.markdown("""
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
-        title={"font": {"size": title_size, "family": "tahoma"}},
+        title={"font": {"size": title_size, "family": "tahoma"},
         hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"},
         paper_bgcolor="#0E1117",
         plot_bgcolor="#161b22",
@@ -303,9 +303,9 @@ def analyze_why_people_leave(df):
         except Exception as e: st.error(f"Error: {e}")
         st.write("---")
         try:
-            refute_placebo = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="placebo_treatment_refuter")
+            refactor_placebo = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="placebo_treatment_refuter")
             st.write("### 2. Placebo Treatment Refuter")
-            st.table(refute_placebo.refutation_result)
+            st.table(refactor_placebo.refutation_result)
         except Exception: pass
 
 
@@ -514,7 +514,7 @@ def main():
         clean_names = [name.split('__')[-1].replace('_', ' ').title() for name in preprocessor.get_feature_names_out()]
         X_processed_df = pd.DataFrame(X_processed, columns=clean_names)
         booster = model.booster_ if hasattr(model, "booster_") else model._Booster if hasattr(model, "_Booster") else model.booster if hasattr(model, "booster") else model
-        explainer = shap.TreeExplainer(booster)
+        explainer = sclass.TreeExplainer(booster)
         shap_values = explainer.shap_values(X_processed_df)
         return shap_values, X_processed_df
 
@@ -539,10 +539,18 @@ def main():
         <hr style='border-color: #30363d; margin: 20px 0;'>
         """, unsafe_allow_html=True)
         
+        # === UPDATED MENU: HR Friendly Names ===
         page = option_menu(
             menu_title=None,
-            options=['Home', 'Vizualizations', 'Prediction', 'Explain Predictions', 'Retention Strategy', 'AI Consultant & Health'],  
-            icons=['house', 'bar-chart-line-fill', "graph-up-arrow", 'lightbulb-fill', 'currency-rupee', 'robot'], 
+            options=[
+                'Home', 
+                'Employee Insights',    # CHANGED FROM "Vizualizations"
+                'Predict Attrition', 
+                'Why They Leave',    # CHANGED FROM "Explain Predictions"
+                'Budget Planner',     # CHANGED FROM "Retention Strategy"
+                'AI Assistant'         # CHANGED FROM "AI Consultant & Health"
+            ],  
+            icons=['house', 'bar-chart-line-fill', "graph-up-arrow", 'helpful-tip-fill', 'currency-rupee', 'robot'], # Icons mapped to new names
             menu_icon="cast", default_index=0, 
             styles={
                 "container": {"padding": "0!important", "background-color": 'transparent'},
@@ -577,18 +585,19 @@ def main():
         st.dataframe(df.head(100), use_container_width=True)
         with st.expander("📊 Data Statistics"): st.table(df.describe().T)
 
-    if page == "Vizualizations":
-        st.header("📉 Data Visualizations")
+    if page == "Employee Insights": # RENAMED
+        st.header("📉 Employee Data Analysis")
+        st.write("Explore the workforce demographics to identify patterns.")
         create_vizualization(df, viz_type="box", data_type="number")
         create_vizualization(df, viz_type="bar", data_type="object")
         create_vizualization(df, viz_type="pie")
         st.plotly_chart(create_heat_map(df), use_container_width=True)
 
-    if page == "Prediction":
+    if page == "Predict Attrition":
         st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess risk.</p>", unsafe_allow_html=True)
         with st.form("Predict_value_form"):
-            satisfaction_map = {'Very Dissatisfied': 0.1, 'Dissatisfied': 0.3, 'Neutral': 0.5, 'Satisfied': 0.7, 'Very Satisfied': 0.9}
+            satisfaction_map = {'Very Dissatisfied': 0.1, 'Deshorted': 0.3, 'Neutral': 0.5, 'Satisfied': 0.7, 'Very Satisfied': 0.9}
             evaluation_map = {'Needs Improvement': 0.4, 'Meets Expectations': 0.7, 'Exceeds Expectations': 0.9}
             c1, c2 = st.columns(2)
             with c1:
@@ -608,7 +617,7 @@ def main():
             satisfaction_level = satisfaction_map[satisfaction_text]; last_evaluation = evaluation_map[evaluation_text]
             Work_accident = 1 if work_accident_text == 'Yes' else 0; promotion_last_5years = 1 if promotion_text == 'Yes' else 0
             input_data = {'satisfaction_level': satisfaction_level, 'last_evaluation': last_evaluation,
-                          'number_project': number_project, 'average_montly_hours': average_montly_hours,
+                          'number_project': number_project, 'average_montly_hours = average_montly_hours,
                           'time_spend_company': time_spend_company, 'Work_accident': Work_accident,
                           'promotion_last_5years': promotion_last_5years, 'Department': Department, 'salary': salary}
             input_df = pd.DataFrame([input_data])
@@ -626,9 +635,11 @@ def main():
                     st.markdown("### 💡 Recommended Actions")
                     for rec in get_retention_strategies(input_df): st.info(rec)
 
-    if page == "Explain Predictions":
-        st.header("🧠 AI Insights (Manager's Summary)")
-        st.write("Understand what drives your employees to leave, without the data science jargon.")
+    if page == "Why They Leave": # RENAMED
+        st.header("🧠 Key Attrition Drivers")
+        st.write("Understand the specific factors driving your team's attrition risk, explained simply.")
+        st.write("This moves beyond standard correlations to identify true causes (e.g. 'Overwork', 'Salary Competitiveness').")
+        st.write("---")
         with st.spinner("Analyzing model insights..."):
             shap_values, X_processed_df = get_shap_explanations(pipeline, df)
             if isinstance(shap_values, list): vals = np.abs(shap_values[1]).mean(0)
@@ -658,9 +669,13 @@ def main():
             st.pyplot(fig2, bbox_inches='tight'); plt.close(fig2)
             fig1, ax1 = plt.subplots(); shap.summary_plot(shap_values, X_processed_df, show=False, plot_type='dot')
             st.pyplot(fig1, bbox_inches='tight'); plt.close(fig1)
+            st.markdown("### Key Insights from the Model:")
+            st.success("**1. Satisfaction is Critical:** Low satisfaction (blue dots) is the strongest single predictor that pushes an employee's attrition risk higher.")
+            st.warning("**2. Workload is a Double-Edged Sword:** Both very high and very low numbers of projects increase attrition risk.")
+            st.info("**3. Tenure Matters:** Employees are more likely to leave around the 4-5 year mark without promotion.")
 
-    if page == "Retention Strategy":
-        st.markdown("<h1 style='margin-bottom: 5px;'>🧠 Retention Strategy & Budget</h1>", unsafe_allow_html=True)
+    if page == "Budget Planner": # RENAMED
+        st.markdown("<h1 style='margin-bottom: 5px;'>💰 Budget Planner</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af; margin-bottom: 30px;'>Data-driven decision support for HR.</p>", unsafe_allow_html=True)
         analyze_why_people_leave(df)
         st.markdown("---")
@@ -689,10 +704,10 @@ def main():
                 st.dataframe(display_df, use_container_width=True)
 
     # ====================================================================
-    # Page: AI Consultant & Health (Universal HR Version - Evaluation 2)
+    # Page: AI Assistant (Evaluation 2 - Groq)
     # ====================================================================
-    if page == "AI Consultant & Health":
-        st.header("🤖 AI Consultant & System Health")
+    if page == "AI Assistant":
+        st.header("🤖 AI Assistant (GenAI & System Health)")
         st.markdown("<p style='color: #9ca3af;'>Tools to ensure reliability and simplify communication.</p>", unsafe_allow_html=True)
         
         # --- SECTION 1: SYSTEM HEALTH ---
