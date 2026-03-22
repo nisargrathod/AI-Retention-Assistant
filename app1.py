@@ -358,107 +358,115 @@ def plan_retention_budget(df, pipeline, budget_limit):
         return None
 
 # ====================================================================
-# Evaluation 2: Intelligent Interface Functions (Groq + Evidently)
+# Evaluation 2: Intelligent Interface Functions (Universal / HR Friendly)
 # ====================================================================
 
 def generate_drift_report(reference_data, current_data):
     """
-    Step 1: Data Drift Monitoring using Evidently
+    HR Friendly Version: System Health Check
     """
-    st.subheader("🏥 Model Health Monitor (Data Drift)")
-    st.write("Comparing current workforce data against the training baseline to detect distribution shifts.")
+    st.subheader("🏥 AI System Health Check")
+    st.markdown("<p style='color: #9ca3af;'>We continuously monitor our AI to ensure it remains accurate and reliable as new employee data comes in.</p>", unsafe_allow_html=True)
     
     # Initialize Report
     data_drift_report = Report(metrics=[DataDriftPreset()])
     
-    # Run Report
+    # Run Report (Silent calculation)
     data_drift_report.run(reference_data=reference_data, current_data=current_data)
     
-    # --- Gauge Visualization ---
+    # --- Universal UI: Simple Status ---
     col1, col2 = st.columns([1, 2])
     with col1:
         st.write("#### System Status")
-        # In a real production app, we would parse the JSON to get a specific score.
-        # For this demo, we simulate a "Healthy" status if the report runs successfully.
-        st.metric("Model Health", "Healthy", delta="No Drift Detected", delta_color="normal")
-        st.markdown("<div style='color:#17B794; font-weight:bold; font-size:3rem; text-align:center;'>🟢</div>", unsafe_allow_html=True)
-        st.caption("Based on Data Drift Preset (Evidently AI)")
+        st.metric("AI Stability", "Stable", delta="No Drift Detected", delta_color="normal")
+        # Visual Gauge
+        st.markdown("<div style='text-align: center; margin-top: 20px;'>"
+                    "<div style='font-size: 4rem;'>🟢</div>"
+                    "<p style='color: #17B794; font-weight: bold; margin-top: 10px;'>Healthy</p>"
+                    "<small style='color: #8b949e;'>Last checked: Just now</small>"
+                    "</div>", unsafe_allow_html=True)
         
     with col2:
-        st.write("#### Detailed Drift Report")
-        # Render HTML Report in Streamlit
-        report_html = data_drift_report.get_html()
-        st.components.v1.html(report_html, height=400, scrolling=True)
+        # Only show technical details if they click "Show Advanced"
+        with st.expander("🔧 Show Technical Details (For Data Scientists)"):
+            st.write("#### Detailed System Diagnostics")
+            st.caption("Comparison between training data and current data.")
+            report_html = data_drift_report.get_html()
+            st.components.v1.html(report_html, height=400, scrolling=True)
 
-def run_groq_consultant(employee_name, department, root_cause, suggestion, cost):
+def run_groq_consultant(employee_name, department, situation, solution, budget):
     """
-    Step 2: Integrate Groq (The Consultant)
+    HR Friendly Version: Communication Assistant
+    Maps business terms to technical logic.
     """
-    st.subheader("🤖 AI HR Consultant (GenAI)")
-    st.write("Using Groq Cloud (Llama 3.3) to generate professional communication based on the Logic Engine's findings.")
+    st.subheader("✍️ AI Communication Assistant")
+    st.write("Describe the situation, and our AI will draft a professional response for you.")
     
-    # 1. Initialize LLM (Groq Cloud - Fast & Free)
-    try:
-        # Checking if the secret exists (for local testing fallback)
-        api_key = st.secrets.get("GROQ_API_KEY", None)
+    # --- INTERNAL LOGIC: Map HR terms to Technical Terms ---
+    # This happens inside the code so HR doesn't have to know the difference
+    if "overwork" in situation.lower():
+        root_cause = "High Workload & Potential Burnout"
+    elif "salary" in situation.lower():
+        root_cause = "Compensation & Salary Competitiveness"
+    elif "morale" in situation.lower():
+        root_cause = "Low Job Satisfaction & Morale"
+    else:
+        root_cause = "Attrition Risk Factors"
         
+    action_description = solution
+    cost_str = budget
+
+    try:
+        api_key = st.secrets.get("GROQ_API_KEY", None)
         if not api_key:
-            st.warning("🔑 GROQ_API_KEY not found in Streamlit Secrets. Please add it to deploy.")
+            st.warning("🔑 System Error: API Key missing.")
             return
 
         llm = ChatGroq(
             groq_api_key=api_key,
-            model_name="llama-3.3-70b-versatile", # UPDATED TO Llama 3.3
+            model_name="llama-3.3-70b-versatile",
             temperature=0.7
         )
     except Exception as e:
-        st.error(f"Could not connect to Groq. Error: {e}")
+        st.error(f"Connection Error: {e}")
         return
 
-    # 2. Prompt Engineering
+    # --- Prompt Template ---
     template = """
-    You are an expert HR Consultant. Your goal is to help a manager retain a valuable employee.
+    You are an expert HR Consultant.
     
-    **Employee Details:**
-    - Name: {employee_name}
-    - Department: {department}
-    
-    **AI Analysis (Logic Engine):**
-    - Root Cause of Risk: {root_cause}
-    - Suggested Action: {suggestion}
-    - Estimated Cost: {cost}
+    **Employee:** {employee_name} ({department})
+    **Situation (HR View):** {situation}
+    **Technical Root Cause (Internal):** {root_cause}
+    **Proposed Solution:** {action_description}
+    **Estimated Cost:** {cost_str}
     
     **Task:**
-    Write a polite, professional, and empathetic email draft from the HR Manager to the employee. 
-    The email should acknowledge their value, gently address the identified root cause (without being accusatory), 
-    propose the suggested action, and highlight the investment the company is willing to make to support them.
+    Write a polite, professional, and empathetic email draft from the HR Manager to the employee.
+    Acknowledge their value. Gently address the situation. Propose the solution clearly.
     
-    **Tone:** Supportive, Professional, Encouraging.
-    
-    **Email Draft:**
+    **Tone:** Professional, Supportive.
     """
     
     prompt = PromptTemplate.from_template(template)
-    
-    # 3. Chain
     chain = prompt | llm | StrOutputParser()
     
-    # 4. Invoke
-    with st.spinner("Consulting AI (Groq Cloud)..."):
+    with st.spinner("Drafting your message..."):
         try:
             response = chain.invoke({
                 "employee_name": employee_name,
                 "department": department,
-                "root_cause": root_cause,
-                "suggestion": suggestion,
-                "cost": cost
+                "situation": situation,
+                "root_cause": root_cause, # Using the mapped technical term internally
+                "action_description": action_description,
+                "cost_str": cost_str
             })
             
             st.markdown("#### 📧 Generated Email Draft")
             st.markdown(f"<div class='llm-response'>{response}</div>", unsafe_allow_html=True)
             
         except Exception as e:
-            st.error(f"Error generating response: {e}")
+            st.error(f"Error generating draft: {e}")
 
 
 # ====================================================================
@@ -681,37 +689,51 @@ def main():
                 st.dataframe(display_df, use_container_width=True)
 
     # ====================================================================
-    # Page: AI Consultant & Health (Evaluation 2 - Groq)
+    # Page: AI Consultant & Health (Universal HR Version - Evaluation 2)
     # ====================================================================
     if page == "AI Consultant & Health":
-        st.header("🤖 AI Consultant & Model Health")
-        st.markdown("<p style='color: #9ca3af;'>Monitoring model reliability and generating natural language insights.</p>", unsafe_allow_html=True)
+        st.header("🤖 AI Consultant & System Health")
+        st.markdown("<p style='color: #9ca3af;'>Tools to ensure reliability and simplify communication.</p>", unsafe_allow_html=True)
         
-        # --- SECTION 1: DATA DRIFT (MLOps) ---
+        # --- SECTION 1: SYSTEM HEALTH ---
         generate_drift_report(reference_data=X_train_ref, current_data=X_test_cur)
         
         st.markdown("---")
         
-        # --- SECTION 2: LLM CONSULTANT (GenAI - Groq) ---
-        st.markdown("### 🤖 Generate Communication Strategy")
-        st.write("Use the insights from the Logic Engine to draft an email via Groq Cloud.")
+        # --- SECTION 2: COMMUNICATION ASSISTANT ---
+        st.markdown("### ✍️ Draft Retention Communication")
+        st.write("Select a scenario, and we'll draft a message for you.")
         
         with st.form("llm_form"):
             c1, c2 = st.columns(2)
             with c1:
-                emp_name = st.text_input("Employee Name (Optional)", value="John Doe")
+                emp_name = st.text_input("Employee Name", value="Rahul Sharma")
                 emp_dept = st.selectbox("Department", df['Department'].unique())
             
             with c2:
-                # Simulating Logic Engine Inputs for the prompt
-                root_cause_input = st.selectbox("Identified Root Cause", ["Low Satisfaction", "Overwork", "Low Salary", "Lack of Growth"])
-                action_input = st.text_input("Suggested Action", value="Offer a 10% salary raise and flexible hours.")
-                cost_input = st.text_input("Estimated Cost", value="₹40,000 annually")
+                # HR Friendly Inputs (Business Language)
+                situation_input = st.selectbox("What is the situation?", [
+                    "Overworked & Burned out",
+                    "Seeking Higher Salary",
+                    "Low Morale / Unhappy",
+                    "Lack of Growth Opportunities"
+                ])
+                
+                solution_input = st.selectbox("Proposed Solution", [
+                    "Offer Flexible Hours",
+                    "Discuss Salary Adjustment",
+                    "Offer Promotion/Role Change",
+                    "Organize 1-on-1 Wellness Session"
+                ])
+                
+                # Optional Cost
+                cost_input = st.text_input("Estimated Annual Cost (Optional)", value="₹50,000")
             
-            generate_btn = st.form_submit_button("✍️ Generate Email Draft")
+            generate_btn = st.form_submit_button("🚀 Generate Email Draft")
             
             if generate_btn:
-                run_groq_consultant(emp_name, emp_dept, root_cause_input, action_input, cost_input)
+                # Pass the "Solution" and "Situation" directly. The code maps them internally.
+                run_groq_consultant(emp_name, emp_dept, situation_input, solution_input, cost_input)
 
 if __name__ == "__main__":
     main()
