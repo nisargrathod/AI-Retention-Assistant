@@ -410,7 +410,7 @@ def run_groq_consultant(employee_name, department, root_cause, suggestion, cost)
 
         llm = ChatGroq(
             groq_api_key=api_key,
-            model_name="llama3-8b-8192", # Using Llama 3 8B
+            model_name="llama3-70b-8192", # Using Llama 3 8B
             temperature=0.7
         )
     except Exception as e:
