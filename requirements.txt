@@ -11,3 +11,9 @@ scipy>=1.9.0
 dowhy
 networkx
 graphviz
+# --- Evaluation 2: Drift & GenAI ---
+evidently
+langchain-community
+langchain-core
+langchain-groq
+groq
