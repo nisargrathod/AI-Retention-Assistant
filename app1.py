@@ -25,7 +25,7 @@ from scipy.optimize import milp, LinearConstraint, Bounds
 # --- Imports for Evaluation 2 (Intelligent Interface: Groq + Evidently) ---
 from evidently.report import Report
 from evidently.metric_preset import DataDriftPreset
-from langchain_groq import ChatGroq  # USING GROQ HERE
+from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 # ====================================================================
@@ -136,7 +136,7 @@ st.markdown("""
         margin-top: 10px;
         color: #e6edf3;
         line-height: 1.6;
-        white-space: pre-wrap; # Keeps email formatting
+        white-space: pre-wrap;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -395,7 +395,7 @@ def run_groq_consultant(employee_name, department, root_cause, suggestion, cost)
     Step 2: Integrate Groq (The Consultant)
     """
     st.subheader("🤖 AI HR Consultant (GenAI)")
-    st.write("Using Groq Cloud (Llama 3) to generate professional communication based on the Logic Engine's findings.")
+    st.write("Using Groq Cloud (Llama 3 70B) to generate professional communication based on the Logic Engine's findings.")
     
     # 1. Initialize LLM (Groq Cloud - Fast & Free)
     try:
@@ -404,13 +404,11 @@ def run_groq_consultant(employee_name, department, root_cause, suggestion, cost)
         
         if not api_key:
             st.warning("🔑 GROQ_API_KEY not found in Streamlit Secrets. Please add it to deploy.")
-            # For local testing only (DO NOT PUT YOUR KEY HERE IN PROD):
-            # api_key = "gsk_your_key_here" 
             return
 
         llm = ChatGroq(
             groq_api_key=api_key,
-            model_name="llama3-70b-8192", # Using Llama 3 8B
+            model_name="llama3-70b-8192", # UPDATED MODEL NAME
             temperature=0.7
         )
     except Exception as e:
