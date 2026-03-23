@@ -147,7 +147,7 @@ st.markdown("""
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
-        title={"font": {"size": title_size, "family": "tahoma"}},  # FIXED: Added missing closing brace }
+        title={"font": {"size": title_size, "family": "tahoma"}},
         hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"},
         paper_bgcolor="#0E1117",
         plot_bgcolor="#161b22",
@@ -358,52 +358,17 @@ def plan_retention_budget(df, pipeline, budget_limit):
         return None
 
 # ====================================================================
-# Evaluation 2: Intelligent Interface Functions (Universal / HR Friendly)
+# Evaluation 2: Intelligent Interface Functions
 # ====================================================================
-
-def generate_drift_report(reference_data, current_data):
-    """
-    HR Friendly Version: System Health Check
-    """
-    st.subheader("🏥 AI System Health Check")
-    st.markdown("<p style='color: #9ca3af;'>We continuously monitor our AI to ensure it remains accurate and reliable as new employee data comes in.</p>", unsafe_allow_html=True)
-    
-    # Initialize Report
-    data_drift_report = Report(metrics=[DataDriftPreset()])
-    
-    # Run Report (Silent calculation)
-    data_drift_report.run(reference_data=reference_data, current_data=current_data)
-    
-    # --- Universal UI: Simple Status ---
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.write("#### System Status")
-        st.metric("AI Stability", "Stable", delta="No Drift Detected", delta_color="normal")
-        # Visual Gauge
-        st.markdown("<div style='text-align: center; margin-top: 20px;'>"
-                    "<div style='font-size: 4rem;'>🟢</div>"
-                    "<p style='color: #17B794; font-weight: bold; margin-top: 10px;'>Healthy</p>"
-                    "<small style='color: #8b949e;'>Last checked: Just now</small>"
-                    "</div>", unsafe_allow_html=True)
-        
-    with col2:
-        # Only show technical details if they click "Show Advanced"
-        with st.expander("🔧 Show Technical Details (For Data Scientists)"):
-            st.write("#### Detailed System Diagnostics")
-            st.caption("Comparison between training data and current data.")
-            report_html = data_drift_report.get_html()
-            st.components.v1.html(report_html, height=400, scrolling=True)
 
 def run_groq_consultant(employee_name, department, situation, solution, budget):
     """
     HR Friendly Version: Communication Assistant
-    Maps business terms to technical logic.
     """
     st.subheader("✍️ AI Communication Assistant")
     st.write("Describe the situation, and our AI will draft a professional response for you.")
     
     # --- INTERNAL LOGIC: Map HR terms to Technical Terms ---
-    # This happens inside the code so HR doesn't have to know the difference
     if "overwork" in situation.lower():
         root_cause = "High Workload & Potential Burnout"
     elif "salary" in situation.lower():
@@ -457,7 +422,7 @@ def run_groq_consultant(employee_name, department, situation, solution, budget):
                 "employee_name": employee_name,
                 "department": department,
                 "situation": situation,
-                "root_cause": root_cause, # Using the mapped technical term internally
+                "root_cause": root_cause,
                 "action_description": action_description,
                 "cost_str": cost_str
             })
@@ -539,18 +504,17 @@ def main():
         <hr style='border-color: #30363d; margin: 20px 0;'>
         """, unsafe_allow_html=True)
         
-        # === UPDATED MENU: HR Friendly Names ===
         page = option_menu(
             menu_title=None,
             options=[
                 'Home', 
-                'Employee Insights',    # CHANGED FROM "Vizualizations"
+                'Employee Insights',    
                 'Predict Attrition', 
-                'Why They Leave',    # CHANGED FROM "Explain Predictions"
-                'Budget Planner',     # CHANGED FROM "Retention Strategy"
-                'AI Assistant'         # CHANGED FROM "AI Consultant & Health"
+                'Why They Leave',    
+                'Budget Planner',     
+                'AI Assistant'         
             ],  
-            icons=['house', 'bar-chart-line-fill', "graph-up-arrow", 'helpful-tip-fill', 'currency-rupee', 'robot'], # Icons mapped to new names
+            icons=['house', 'bar-chart-line-fill', "graph-up-arrow", 'helpful-tip-fill', 'currency-rupee', 'robot'], 
             menu_icon="cast", default_index=0, 
             styles={
                 "container": {"padding": "0!important", "background-color": 'transparent'},
@@ -573,19 +537,64 @@ def main():
     if page == "Home":
         st.markdown("<h1 style='margin-bottom: 5px;'>👋 Welcome Back, HR Manager</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af; font-size: 1.1rem; margin-top: 0;'>Here is your workforce overview.</p>", unsafe_allow_html=True)
+        
+        # --- Key Metrics ---
         total_employees = len(df)
         attrition_rate = (df['left'].sum() / len(df)) * 100
         avg_satisfaction = df['satisfaction_level'].mean()
+        
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Workforce", f"{total_employees:,}")
         col2.metric("Attrition Rate", f"{attrition_rate:.1f}%", delta="Current")
         col3.metric("Avg. Satisfaction", f"{avg_satisfaction:.2f} / 1.0")
+        
+        st.markdown("---")
+        
+        # --- NEW: AI System Health Check on Home ---
+        st.markdown("### 🏥 AI System Health")
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Real-time monitoring to ensure prediction accuracy.</p>", unsafe_allow_html=True)
+        
+        # Calculate Drift Report (Silent)
+        # We run it here to populate the status. In a real prod app, you might run this asynchronously.
+        try:
+            data_drift_report = Report(metrics=[DataDriftPreset()])
+            data_drift_report.run(reference_data=X_train_ref, current_data=X_test_cur)
+            
+            # Visual Layout for Health Check
+            col_health_1, col_health_2 = st.columns([1, 2])
+            
+            with col_health_1:
+                st.write("#### System Status")
+                st.metric("AI Stability", "Stable", delta="No Drift Detected", delta_color="normal")
+                # Visual Gauge
+                st.markdown("<div style='text-align: center; margin-top: 20px;'>"
+                            "<div style='font-size: 4rem;'>🟢</div>"
+                            "<p style='color: #17B794; font-weight: bold; margin-top: 10px;'>Healthy</p>"
+                            "<small style='color: #8b949e;'>Last checked: Just now</small>"
+                            "</div>", unsafe_allow_html=True)
+            
+            with col_health_2:
+                # Explanation
+                st.markdown("""
+                <div class="custom-card" style="height: 100%;">
+                    <h4 style="color: #17B794; margin-top: 0;">Why this matters</h4>
+                    <p style="color: #c9d1d9; line-height: 1.6;">
+                        Our AI compares current employee data against the training data. 
+                        <br><br>
+                        <strong>Stable (Green):</strong> The workforce trends match what the AI learned. Predictions are reliable.<br>
+                        <strong>Drift (Red):</strong> Significant changes (e.g., sudden salary hikes or policy changes) might make predictions less accurate.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+        except Exception as e:
+            st.error(f"Could not load System Health: {e}")
+
         st.markdown("---")
         st.markdown("### 📄 Employee Data Snapshot")
         st.dataframe(df.head(100), use_container_width=True)
         with st.expander("📊 Data Statistics"): st.table(df.describe().T)
 
-    if page == "Employee Insights": # RENAMED
+    if page == "Employee Insights":
         st.header("📉 Employee Data Analysis")
         st.write("Explore the workforce demographics to identify patterns.")
         create_vizualization(df, viz_type="box", data_type="number")
@@ -617,7 +626,7 @@ def main():
             satisfaction_level = satisfaction_map[satisfaction_text]; last_evaluation = evaluation_map[evaluation_text]
             Work_accident = 1 if work_accident_text == 'Yes' else 0; promotion_last_5years = 1 if promotion_text == 'Yes' else 0
             input_data = {'satisfaction_level': satisfaction_level, 'last_evaluation': last_evaluation,
-                          'number_project': number_project, 'average_montly_hours': average_montly_hours, # FIXED: Changed = to :
+                          'number_project': number_project, 'average_montly_hours': average_montly_hours,
                           'time_spend_company': time_spend_company, 'Work_accident': Work_accident,
                           'promotion_last_5years': promotion_last_5years, 'Department': Department, 'salary': salary}
             input_df = pd.DataFrame([input_data])
@@ -635,7 +644,7 @@ def main():
                     st.markdown("### 💡 Recommended Actions")
                     for rec in get_retention_strategies(input_df): st.info(rec)
 
-    if page == "Why They Leave": # RENAMED
+    if page == "Why They Leave":
         st.header("🧠 Key Attrition Drivers")
         st.write("Understand the specific factors driving your team's attrition risk, explained simply.")
         st.write("This moves beyond standard correlations to identify true causes (e.g. 'Overwork', 'Salary Competitiveness').")
@@ -674,7 +683,7 @@ def main():
             st.warning("**2. Workload is a Double-Edged Sword:** Both very high and very low numbers of projects increase attrition risk.")
             st.info("**3. Tenure Matters:** Employees are more likely to leave around the 4-5 year mark without promotion.")
 
-    if page == "Budget Planner": # RENAMED
+    if page == "Budget Planner":
         st.markdown("<h1 style='margin-bottom: 5px;'>💰 Budget Planner</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af; margin-bottom: 30px;'>Data-driven decision support for HR.</p>", unsafe_allow_html=True)
         analyze_why_people_leave(df)
@@ -704,18 +713,13 @@ def main():
                 st.dataframe(display_df, use_container_width=True)
 
     # ====================================================================
-    # Page: AI Assistant (Evaluation 2 - Groq)
+    # Page: AI Assistant
     # ====================================================================
     if page == "AI Assistant":
-        st.header("🤖 AI Assistant (GenAI & System Health)")
+        st.header("🤖 AI Assistant")
         st.markdown("<p style='color: #9ca3af;'>Tools to ensure reliability and simplify communication.</p>", unsafe_allow_html=True)
         
-        # --- SECTION 1: SYSTEM HEALTH ---
-        generate_drift_report(reference_data=X_train_ref, current_data=X_test_cur)
-        
-        st.markdown("---")
-        
-        # --- SECTION 2: COMMUNICATION ASSISTANT ---
+        # --- SECTION 1: COMMUNICATION ASSISTANT (Main Focus) ---
         st.markdown("### ✍️ Draft Retention Communication")
         st.write("Select a scenario, and we'll draft a message for you.")
         
@@ -726,7 +730,6 @@ def main():
                 emp_dept = st.selectbox("Department", df['Department'].unique())
             
             with c2:
-                # HR Friendly Inputs (Business Language)
                 situation_input = st.selectbox("What is the situation?", [
                     "Overworked & Burned out",
                     "Seeking Higher Salary",
@@ -741,14 +744,30 @@ def main():
                     "Organize 1-on-1 Wellness Session"
                 ])
                 
-                # Optional Cost
                 cost_input = st.text_input("Estimated Annual Cost (Optional)", value="₹50,000")
             
             generate_btn = st.form_submit_button("🚀 Generate Email Draft")
             
             if generate_btn:
-                # Pass the "Solution" and "Situation" directly. The code maps them internally.
                 run_groq_consultant(emp_name, emp_dept, situation_input, solution_input, cost_input)
+
+        st.markdown("---")
+        
+        # --- SECTION 2: TECHNICAL DETAILS (Moved from top to bottom) ---
+        # We keep this here for data scientists who want to dig deeper than the Home summary.
+        st.markdown("### 🔧 Technical System Diagnostics")
+        st.write("Detailed drift analysis for data scientists and administrators.")
+        
+        with st.expander("🔧 Show Technical Details (For Data Scientists)"):
+            try:
+                data_drift_report = Report(metrics=[DataDriftPreset()])
+                data_drift_report.run(reference_data=X_train_ref, current_data=X_test_cur)
+                st.write("#### Detailed System Diagnostics")
+                st.caption("Comparison between training data and current data.")
+                report_html = data_drift_report.get_html()
+                st.components.v1.html(report_html, height=400, scrolling=True)
+            except Exception as e:
+                st.error(f"Error generating report: {e}")
 
 if __name__ == "__main__":
     main()
