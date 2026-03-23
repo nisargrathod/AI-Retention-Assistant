@@ -147,7 +147,7 @@ st.markdown("""
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
-        title={"font": {"size": title_size, "family": "tahoma"},
+        title={"font": {"size": title_size, "family": "tahoma"}},  # FIXED: Added missing closing brace }
         hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"},
         paper_bgcolor="#0E1117",
         plot_bgcolor="#161b22",
@@ -514,7 +514,7 @@ def main():
         clean_names = [name.split('__')[-1].replace('_', ' ').title() for name in preprocessor.get_feature_names_out()]
         X_processed_df = pd.DataFrame(X_processed, columns=clean_names)
         booster = model.booster_ if hasattr(model, "booster_") else model._Booster if hasattr(model, "_Booster") else model.booster if hasattr(model, "booster") else model
-        explainer = sclass.TreeExplainer(booster)
+        explainer = shap.TreeExplainer(booster)
         shap_values = explainer.shap_values(X_processed_df)
         return shap_values, X_processed_df
 
@@ -617,7 +617,7 @@ def main():
             satisfaction_level = satisfaction_map[satisfaction_text]; last_evaluation = evaluation_map[evaluation_text]
             Work_accident = 1 if work_accident_text == 'Yes' else 0; promotion_last_5years = 1 if promotion_text == 'Yes' else 0
             input_data = {'satisfaction_level': satisfaction_level, 'last_evaluation': last_evaluation,
-                          'number_project': number_project, 'average_montly_hours = average_montly_hours,
+                          'number_project': number_project, 'average_montly_hours': average_montly_hours, # FIXED: Changed = to :
                           'time_spend_company': time_spend_company, 'Work_accident': Work_accident,
                           'promotion_last_5years': promotion_last_5years, 'Department': Department, 'salary': salary}
             input_df = pd.DataFrame([input_data])
