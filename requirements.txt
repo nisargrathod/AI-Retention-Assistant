@@ -7,13 +7,9 @@ shap
 matplotlib
 lightgbm
 scikit-learn
-scipy>=1.9.0
+scipy
 dowhy
-networkx
-graphviz
-# --- Evaluation 2: Drift & GenAI ---
 evidently
-langchain-community
-langchain-core
+langchain
 langchain-groq
-groq
+dice-ml
