@@ -31,6 +31,10 @@ from evidently.metric_preset import DataDriftPreset
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+
+# --- Imports for AI Research Lab (Counterfactuals) ---
+import dice_ml
+from dice_ml import Dice
 # ====================================================================
 
 # ====================================================================
@@ -150,7 +154,7 @@ st.markdown("""
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
-        title={"font": {"size": title_size, "family": "tahoma"}},
+        title={"font": {"size": title_size, "family": "tahoma"}}, # Fixed Syntax
         hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"},
         paper_bgcolor="#0E1117",
         plot_bgcolor="#161b22",
@@ -441,7 +445,12 @@ def main():
 
     @st.cache_data
     def load_data_and_train_model():
+        # Progress 1
+        st.write("📂 Step 1/3: Loading Dataset from CSV...")
         df = pd.read_csv('HR_comma_sep.csv')
+        
+        # Progress 2
+        st.write("🧹 Step 2/3: Preprocessing & Splitting Data...")
         df_original = df.copy()
         df_train = df.drop_duplicates().reset_index(drop=True)
         X = df_train.drop('left', axis=1)
@@ -457,16 +466,29 @@ def main():
                 ('num', StandardScaler(), numerical_features),
                 ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)])
         
-        # Main Model: LightGBM
-        best_params = {'n_estimators': 1888, 'learning_rate': 0.019, 'num_leaves': 22, 'max_depth': 11, 'random_state': 42}
+        # Progress 3
+        st.write("🤖 Step 3/3: Training AI Model (LightGBM)...")
+        # REDUCED n_estimators for faster loading
+        best_params = {
+            'n_estimators': 500, 
+            'learning_rate': 0.05, 
+            'num_leaves': 31, 
+            'max_depth': 10, 
+            'random_state': 42,
+            'verbose': -1
+        }
+        
         final_pipeline = Pipeline(steps=[
             ('preprocessor', preprocessor),
             ('classifier', lgb.LGBMClassifier(**best_params))])
+        
         final_pipeline.fit(X_train, y_train)
         
         return final_pipeline, df_original, X_train, X_test, y_train, y_test, preprocessor, categorical_features, numerical_features
 
+    # Execute Loading
     pipeline, df, X_train_ref, X_test_cur, y_train, y_test, preprocessor, cat_feat, num_feat = load_data_and_train_model()
+    st.empty() # Clear progress text
 
     @st.cache_data
     def get_shap_explanations(_pipeline, _df):
@@ -503,7 +525,6 @@ def main():
         <hr style='border-color: #30363d; margin: 20px 0;'>
         """, unsafe_allow_html=True)
         
-        # === UPDATED MENU WITH AI RESEARCH LAB ===
         page = option_menu(
             menu_title=None,
             options=[
@@ -513,7 +534,7 @@ def main():
                 'Why They Leave',    
                 'Budget Planner',
                 'AI Assistant',
-                'AI Research Lab'  # <--- NEW CATEGORY ADDED
+                'AI Research Lab'  
             ],  
             icons=['house', 'bar-chart-line-fill', "graph-up-arrow", 'helpful-tip-fill', 'currency-rupee', 'robot', 'cpu'], 
             menu_icon="cast", default_index=0, 
@@ -621,7 +642,7 @@ def main():
             satisfaction_level = satisfaction_map[satisfaction_text]; last_evaluation = evaluation_map[evaluation_text]
             Work_accident = 1 if work_accident_text == 'Yes' else 0; promotion_last_5years = 1 if promotion_text == 'Yes' else 0
             input_data = {'satisfaction_level': satisfaction_level, 'last_evaluation': last_evaluation,
-                          'number_project': number_project, 'average_montly_hours': average_montly_hours,
+                          'number_project': number_project, 'average_montly_hours': average_montly_hours, # Fixed Syntax
                           'time_spend_company': time_spend_company, 'Work_accident': Work_accident,
                           'promotion_last_5years': promotion_last_5years, 'Department': Department, 'salary': salary}
             input_df = pd.DataFrame([input_data])
@@ -762,7 +783,7 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # NEW PAGE: AI Research Lab (M.Tech Level Additions)
+    # Page: AI Research Lab (M.Tech Level Additions)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
@@ -845,28 +866,102 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall, minimizing both False Positives and False Negatives.")
 
-        # --- TAB 2: COUNTERFACTUALS (Placeholder / Requires DiCE library) ---
+        # --- TAB 2: COUNTERFACTUALS (Fully Implemented with DiCE) ---
         with tab2:
-            st.subheader("What-If Simulator (Counterfactuals)")
-            st.info("🧪 **Experimental Feature:** This module uses `DiCE` (Diverse Counterfactual Explanations) to generate minimal changes required to flip a prediction from 'Leave' to 'Stay'.")
+            st.subheader("🔮 What-If Simulator (Counterfactuals)")
+            st.markdown("<p style='color: #9ca3af;'>Generates minimal changes required to flip a prediction from 'Leave' to 'Stay'.</p>", unsafe_allow_html=True)
             
-            st.write("""
-            *Example Use Case:*
-            > "Employee A is predicted to leave. The AI suggests that increasing their 'Satisfaction Level' by 0.15 OR reducing their 'Average Monthly Hours' by 10 would change the prediction to 'Stay'."
+            # 1. Identify High Risk Employees (Real Data)
+            X_all = df.drop('left', axis=1)
+            # Predict on all data to find leavers
+            predictions = pipeline.predict(X_all)
+            high_risk_indices = df[predictions == 1].index
             
-            **Implementation Note:** To enable this, install: `pip install dice-ml`
-            """)
-            
-            # Mock UI for demonstration
-            with st.expander("🔧 Try Prototype (Mock Data)"):
-                st.write("Select an employee to generate counterfactuals:")
-                emp_select = st.selectbox("Employee ID", [f"EMP_{100+i}" for i in range(5)])
-                if st.button("Generate Counterfactuals"):
-                    st.warning("⚠️ This requires the `dice-ml` library integration to function with real data.")
+            if len(high_risk_indices) == 0:
+                st.info("✅ No employees are currently predicted to leave by the model.")
+            else:
+                st.write(f"Found **{len(high_risk_indices)}** employees predicted to leave. Select one to analyze:")
+                
+                # 2. Select Employee
+                selected_idx = st.selectbox("Select At-Risk Employee", high_risk_indices, format_func=lambda x: f"Employee ID: {x}")
+                
+                if st.button("Generate Counterfactuals", type="primary"):
+                    with st.spinner("🔮 Calculating minimal interventions..."):
+                        try:
+                            # Prepare Data for DiCE
+                            # DiCE needs the raw dataframe (before encoding) and a list of continuous features
+                            query_instance = df.loc[[selected_idx]].drop('left', axis=1)
+                            
+                            continuous_features = ['satisfaction_level', 'last_evaluation', 'number_project', 'average_montly_hours', 'time_spend_company']
+                            
+                            # Setup DiCE
+                            # backend='sklearn' works with our Pipeline directly!
+                            d = dice_ml.Data(dataframe=df.drop('left', axis=1), continuous_features=continuous_features, outcome_name='left')
+                            m = dice_ml.Model(model=pipeline, backend='sklearn')
+                            
+                            # Generate Counterfactuals
+                            exp = Dice(d, m, method='random')
+                            # We want 3 diverse scenarios to flip the class
+                            cf = exp.generate_counterfactuals(query_instance, total_CFs=3, desired_class="opposite")
+                            
+                            # 3. Display Results (HR Friendly Format)
+                            st.success(f"✨ Success! Here are 3 scenarios to keep Employee **{selected_idx}**:")
+                            
+                            # Convert to pandas for easier display
+                            cf_df = cf.cf_examples_list[0].final_cfs_df
+                            
+                            # Reset index for clean display
+                            original = query_instance.iloc[0]
+                            
+                            # Create a display comparison
+                            scenarios = []
+                            for i in range(len(cf_df)):
+                                changes = []
+                                cf_row = cf_df.iloc[i]
+                                
+                                # Compare columns
+                                for col in original.index:
+                                    orig_val = original[col]
+                                    new_val = cf_row[col]
+                                    
+                                    # Only show significant changes (handling float precision)
+                                    if isinstance(orig_val, float):
+                                        if abs(orig_val - new_val) > 0.05:
+                                            changes.append(f"• **{col.replace('_', ' ').title()}**: {orig_val:.2f} ➝ {new_val:.2f}")
+                                    else:
+                                        if orig_val != new_val:
+                                            changes.append(f"• **{col.replace('_', ' ').title()}**: {orig_val} ➝ {new_val}")
+                                
+                                if changes:
+                                    scenarios.append("\n".join(changes))
+                                else:
+                                    scenarios.append("• (No significant changes detected)")
 
-        # --- TAB 3: FAIRNESS AUDIT (Placeholder / Requires Fairlearn library) ---
+                            # Display in Columns
+                            col_s1, col_s2, col_s3 = st.columns(3)
+                            cols_list = [col_s1, col_s2, col_s3]
+                            
+                            for i, scenario in enumerate(scenarios):
+                                with cols_list[i]:
+                                    st.markdown(f"""
+                                    <div class="custom-card" style="border-color: #EEB76B;">
+                                        <h4 style="color: #EEB76B; margin-top:0;">Scenario {i+1}</h4>
+                                        <p style="font-size: 0.9rem; line-height: 1.4;">
+                                            {scenario}
+                                        </p>
+                                        <small style="color: #8b949e;">Result: Prediction changes to <strong>STAY</strong></small>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+
+                        except ImportError:
+                            st.error("❌ Library `dice-ml` not found. Please run `pip install dice-ml` in your terminal.")
+                        except Exception as e:
+                            st.error(f"⚠️ An error occurred: {e}")
+                            st.write("Debug Info:", e)
+
+        # --- TAB 3: FAIRNESS AUDIT (Placeholder) ---
         with tab3:
-            st.subheader("Algorithmic Fairness Audit")
+            st.subheader("⚖️ Algorithmic Fairness Audit")
             st.info("⚖️ **Ethical AI:** This module checks for demographic parity. Is the model biased against specific Departments or Salary Tiers?")
             
             st.write("""
@@ -877,7 +972,6 @@ def main():
             **Implementation Note:** To enable this, install: `pip install fairlearn`
             """)
             
-            # Mock UI
             with st.expander("🔧 Run Bias Check (Mock)"):
                 sensitive_feature = st.selectbox("Check Bias By", ['Department', 'Salary'])
                 if st.button("Audit Fairness"):
