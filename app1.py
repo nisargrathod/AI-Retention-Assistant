@@ -885,7 +885,7 @@ def main():
                 # 2. Select Employee
                 selected_idx = st.selectbox("Select At-Risk Employee", high_risk_indices, format_func=lambda x: f"Employee ID: {x}")
                 
-                                if st.button("Generate Counterfactuals", type="primary"):
+                if st.button("Generate Counterfactuals", type="primary"):
                     with st.spinner("🔮 Calculating minimal interventions..."):
                         try:
                             # --- FIX: DO NOT DROP 'left' HERE ---
