@@ -888,16 +888,15 @@ def main():
                 if st.button("Generate Counterfactuals", type="primary"):
                     with st.spinner("🔮 Calculating minimal interventions..."):
                         try:
-                            # --- FIX: DO NOT DROP 'left' HERE ---
-                            # DiCE needs the full dataframe to identify the outcome column correctly
-                            query_instance = df.loc[[selected_idx]] 
-                            
+                            # --- FIX 1: The Data Object needs the FULL dataframe (so it sees 'left') ---
                             continuous_features = ['satisfaction_level', 'last_evaluation', 'number_project', 'average_montly_hours', 'time_spend_company']
                             
-                            # --- FIX: USE FULL 'df' (do not drop 'left') ---
-                            # DiCE will use 'outcome_name' to separate features from target internally
                             d = dice_ml.Data(dataframe=df, continuous_features=continuous_features, outcome_name='left')
                             m = dice_ml.Model(model=pipeline, backend='sklearn')
+                            
+                            # --- FIX 2: The Query Instance (the specific employee) must DROP 'left' ---
+                            # We only want to give the AI the features, not the answer, so it can calculate the change.
+                            query_instance = df.loc[[selected_idx]].drop('left', axis=1)
                             
                             # Generate Counterfactuals
                             exp = Dice(d, m, method='random')
@@ -907,7 +906,7 @@ def main():
                             st.success(f"✨ Success! Here are 3 scenarios to keep Employee **{selected_idx}**:")
                             
                             cf_df = cf.cf_examples_list[0].final_cfs_df
-                            original = query_instance.iloc[0]
+                            original = df.loc[selected_idx] # We use the full row for comparison display
                             
                             scenarios = []
                             for i in range(len(cf_df)):
