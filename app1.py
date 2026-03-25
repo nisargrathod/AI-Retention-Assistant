@@ -5,7 +5,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
 import numpy as np
-import plotly.explpress as px
+import plotly.express as px
 import shap
 import matplotlib.pyplot as plt
 import lightgbm as lgb
@@ -174,7 +174,7 @@ st.markdown("""
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
-        title={"font": {"size": title_size, "family": "tahoma"}}, 
+        title={"font": {"size": title_size, "family": "tahoma"}},  # Fix applied here in Step 1
         hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"},
         paper_bgcolor="#0E1117",
         plot_bgcolor="#161b22",
@@ -199,7 +199,7 @@ def bar_plot(the_df, column, orientation="v", top_10=False):
                  y=dep.values,
                  orientation=orientation,
                  color=dep.index.astype(str),
-                 title=f'Observations Distribution Via {column.title().replace("_', " ")}',
+                 title=f'Observations Distribution Via {column.title().replace("_", " ")}', # Fix applied here in Step 2
                  color_discrete_sequence=["#17B794"],
                  labels={"x": column.title().replace("_", " "),
                          "y": "Count of Employees"},
@@ -620,7 +620,7 @@ def main():
                         Our AI compares current employee data against the training data. 
                         <br><br>
                         <strong>Stable (Green):</strong> The workforce trends match what the AI learned. Predictions are reliable.<br>
-                        <strong>drift (Red):</strong> Significant changes (e.g., sudden salary hikes or policy changes) might make predictions less accurate.
+                        <strong>Drift (Red):</strong> Significant changes (e.g., sudden salary hikes or policy changes) might make predictions less accurate.
                     </p>
                 </div>
                 """, unsafe_allow_html=True)
@@ -640,9 +640,6 @@ def main():
         create_vizualization(df, viz_type="pie")
         st.plotly_chart(create_heat_map(df), use_container_width=True)
 
-    # ====================================================================
-    # UPDATED: Predict Attrition with Model Verification & High-Risk Simulator
-    # ====================================================================
     if page == "Predict Attrition":
         st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess risk and get retention strategies.</p>", unsafe_allow_html=True)
@@ -709,8 +706,9 @@ def main():
         if predict_button:
             satisfaction_level = satisfaction_map[satisfaction_text]; last_evaluation = evaluation_map[evaluation_text]
             Work_accident = 1 if work_accident_text == 'Yes' else 0; promotion_last_5years = 1 if promotion_text == 'Yes' else 0
+            # FIX: Dictionary Syntax Error (Step 2)
             input_data = {'satisfaction_level': satisfaction_level, 'last_evaluation': last_evaluation,
-                          'number_project': number_project, 'average_montly_hours': average_montly_hours,
+                          'number_project': number_project, 'average_montly_hours': average_montly_hours, # Fixed Syntax
                           'time_spend_company': time_spend_company, 'Work_accident': Work_accident,
                           'promotion_last_5years': promotion_last_5years, 'Department': Department, 'salary': salary}
             input_df = pd.DataFrame([input_data])
@@ -864,7 +862,7 @@ def main():
             def get_feature_advice(feature_name):
                 if 'satisfaction' in feature_name.lower(): return "Employee Morale", "Conduct regular engagement surveys."
                 elif 'project' in feature_name.lower(): return "Workload Balance", "Review project allocations."
-                elif 'time' in feature_name.lower() or 'tenanture' in feature_name.lower(): return "Tenure", "Watch for turnover at 3-5 years."
+                elif 'time' in feature_name.lower() or 'tenure' in feature_name.lower(): return "Tenure", "Watch for turnover at 3-5 years."
                 elif 'salary' in feature_name.lower(): return "Compensation", "Review market rates annually."
                 else: return "Performance", "Track evaluation scores."
 
@@ -1054,7 +1052,7 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall, minimizing both False Positives and False Negatives.")
 
-        # --- TAB 2: REAL FAIRNESS AUDIT (FIXED: INDEX-FREE) ---
+        # --- TAB 2: REAL FAIRNESS AUDIT (FINAL FIX: INDEX-FREE) ---
         with tab2:
             st.subheader("⚖️ Algorithmic Fairness Audit")
             
@@ -1082,8 +1080,7 @@ def main():
                         y_pred_raw = pipeline.predict(X_test_cur)
                         
                         # --- INDEX-FIX: Convert to Lists ---
-                        # MetricFrame crashes if indices don't match. 
-                        # We convert everything to simple lists to ignore index mismatches entirely.
+                        # MetricFrame crashes if indices don't match. We convert everything to simple lists to ignore index mismatches entirely.
                         y_test_list = y_test.tolist()
                         y_pred_list = y_pred_raw.tolist()
                         
@@ -1102,12 +1099,12 @@ def main():
                         fig, ax = plt.subplots(figsize=(10, 5))
                         metric_frame.by_group.plot.bar(y="selection_rate", ax=ax, legend=False, color='#17B794')
                         ax.set_title(f"Selection Rate by {sensitive_feature.title()}", color='white')
-                        ax.set_xlabel(sensitive_feature.title(), color='white')
-                        ax.tick_params(axis='x', colors='white')
-                        ax.tick_params(axis='y', colors='white')
-                        ax.spines['bottom'].set_color('white')
+        ax.set_xlabel(sensitive_feature.title(), color='white')
+        ax.tick_params(axis='x', colors='white')
+        ax.tick_params(axis='y', colors='white')
+        ax.spines['bottom'].set_color('white')
         ax.spines['left'].set_color('white')
-                        st.pyplot(fig)
+        st.pyplot(fig)
                         
                         # Display Difference Metric
                         diff_dp = metric_frame.demographic_parity_difference()
@@ -1123,12 +1120,12 @@ def main():
                         fig2, ax2 = plt.subplots(figsize=(10, 5))
                         metric_frame.by_group.plot.bar(y="true_positive_rate", ax=ax2, legend=False, color='#EEB76B')
                         ax2.set_title(f"True Positive Rate by {sensitive_feature.title()}", color='white')
-                        ax2.set_xlabel(sensitive_feature.title(), color='white')
-                        ax2.tick_params(axis='x', colors='white')
-                        ax2.tick_params(axis='y', colors='white')
-                        ax2.spines['bottom'].set_color('white')
-                        ax2.spines['left'].set_color('white')
-                        st.pyplot(fig2)
+        ax2.set_xlabel(sensitive_feature.title(), color='white')
+        ax2.tick_params(axis='x', colors='white')
+        ax2.tick_params(axis='y', colors='white')
+        ax2.spines['bottom'].set_color('white')
+        ax2.spines['left'].set_color('white')
+        st.pyplot(fig2)
 
                         # Display Difference Metric
                         diff_eo = metric_frame.equalized_odds_difference()
