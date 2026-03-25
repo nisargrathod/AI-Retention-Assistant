@@ -271,9 +271,7 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
                 cols_index.append(i)
 
     if len(cols_index) > 0:
-        # ====================================================================
-        # FIX APPLIED HERE (Line 274): Closed the parenthesis correctly and removed redundant str()
-        # ====================================================================
+        # FIX: Corrected list comprehension syntax
         tabs = st.tabs([num_columns[i].title().replace("_", " ") for i in cols_index])
         for i in range(len(cols_index)):
             tabs[i].plotly_chart(figs[i], use_container_width=True)
@@ -979,7 +977,7 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (UPDATED: REAL FAIRNESS AUDIT - INDEX-FIX)
+    # Page: AI Research Lab (FIXED: METRICFRAME TYPEERROR)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
@@ -1062,7 +1060,7 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall, minimizing both False Positives and False Negatives.")
 
-        # --- TAB 2: REAL FAIRNESS AUDIT (FINAL FIX: INDEX-FREE) ---
+        # --- TAB 2: REAL FAIRNESS AUDIT (FIXED: SERIES ALIGNMENT) ---
         with tab2:
             st.subheader("⚖️ Algorithmic Fairness Audit")
             
@@ -1089,18 +1087,19 @@ def main():
                     with st.spinner("Calculating bias metrics..."):
                         y_pred_raw = pipeline.predict(X_test_cur)
                         
-                        # --- INDEX-FIX: Convert to Lists ---
-                        # MetricFrame crashes if indices don't match. We convert everything to simple lists to ignore index mismatches entirely.
-                        y_test_list = y_test.tolist()
-                        y_pred_list = y_pred_raw.tolist()
+                        # ====================================================================
+                        # FIX: Convert to Pandas Series with matching indices (0..N)
+                        # This resolves the TypeError caused by mixed list/array inputs 
+                        # or index mismatches in MetricFrame's internal DataFrame construction.
+                        # ====================================================================
+                        y_true_aligned = y_test.reset_index(drop=True)
+                        y_pred_aligned = pd.Series(y_pred_raw, name='predicted_left').reset_index(drop=True)
+                        sensitive_aligned = X_test_cur[sensitive_feature].reset_index(drop=True)
                         
-                        # Extract the specific sensitive feature values as a list (not a DataFrame)
-                        sensitive_values = X_test_cur[sensitive_feature].tolist()
-                        
-                        # Run MetricFrame using lists
-                        metric_frame = MetricFrame(y_true=y_test_list,
-                                                     y_pred=y_pred_list,
-                                                     sensitive_features=sensitive_values)
+                        # Run MetricFrame using aligned Series
+                        metric_frame = MetricFrame(y_true=y_true_aligned,
+                                                     y_pred=y_pred_aligned,
+                                                     sensitive_features=sensitive_aligned)
                         
                         # --- 1. SELECTION RATE (Demographic Parity) ---
                         st.markdown("#### 📊 Demographic Parity (Selection Rate)")
