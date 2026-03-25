@@ -482,8 +482,9 @@ def main():
         # Progress 3
         st.write("🤖 Step 3/3: Training AI Model (LightGBM)...")
         
-        # --- FIX: Added class_weight='balanced' to handle Imbalance ---
-        # This ensures the AI doesn't just predict "Stay" for everyone
+        # --- FIX: Aggressive Sensitivity Settings ---
+        # We manually set scale_pos_weight to ~15 to force the model to detect attrition more easily.
+        # This prevents the "Always Stay" issue by heavily penalizing missed 'Leave' cases.
         best_params = {
             'n_estimators': 500, 
             'learning_rate': 0.05, 
@@ -491,7 +492,8 @@ def main():
             'max_depth': 10, 
             'random_state': 42,
             'verbose': -1,
-            'class_weight': 'balanced'  # <--- CRITICAL FIX
+            'class_weight': 'balanced',
+            'scale_pos_weight': 15  # <--- FORCE SENSITIVITY TO 'LEAVE' CLASS
         }
         
         final_pipeline = Pipeline(steps=[
@@ -635,7 +637,7 @@ def main():
         st.plotly_chart(create_heat_map(df), use_container_width=True)
 
     # ====================================================================
-    # UPDATED: Predict Attrition with Model Verification
+    # UPDATED: Predict Attrition with Model Verification & High-Risk Simulator
     # ====================================================================
     if page == "Predict Attrition":
         st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
@@ -671,8 +673,10 @@ def main():
         st.markdown("---")
 
         with st.form("Predict_value_form"):
-            satisfaction_map = {'Very Dissatisfied': 0.1, 'Deshorted': 0.3, 'Neutral': 0.5, 'Satisfied': 0.7, 'Very Satisfied': 0.9}
+            st.markdown("##### 👤 Employee Profile")
+            satisfaction_map = {'Very Dissatisfied': 0.1, 'Dissatisfied': 0.3, 'Neutral': 0.5, 'Satisfied': 0.7, 'Very Satisfied': 0.9}
             evaluation_map = {'Needs Improvement': 0.4, 'Meets Expectations': 0.7, 'Exceeds Expectations': 0.9}
+            
             c1, c2 = st.columns(2)
             with c1:
                 satisfaction_text = st.select_slider('Satisfaction Level', options=satisfaction_map.keys())
@@ -685,13 +689,20 @@ def main():
                 promotion_text = st.selectbox('Promotion in Last 5 Years', ('No', 'Yes'))
                 Department = st.selectbox('Department', df['Department'].unique())
                 salary = st.selectbox('Salary', df['salary'].unique())
-            predict_button = st.form_submit_button(label='🔮 Analyze Employee')
+            
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                predict_button = st.form_submit_button(label='🔮 Analyze Employee', type='primary')
+            with col_btn2:
+                # --- NEW: ONE-CLICK HIGH RISK TEST ---
+                test_high_risk = st.form_submit_button(label='🔥 Simulate High-Risk Employee', type='secondary')
 
         if 'prediction_result' not in st.session_state:
             st.session_state.prediction_result = None
             st.session_state.input_df = None
             st.session_state.prediction_probas = None
 
+        # Handle Normal Prediction
         if predict_button:
             satisfaction_level = satisfaction_map[satisfaction_text]; last_evaluation = evaluation_map[evaluation_text]
             Work_accident = 1 if work_accident_text == 'Yes' else 0; promotion_last_5years = 1 if promotion_text == 'Yes' else 0
@@ -707,6 +718,30 @@ def main():
                 st.session_state.prediction_result = prediction
                 st.session_state.input_df = input_df
                 st.session_state.prediction_probas = prediction_probas
+
+        # Handle High Risk Simulation (Auto-fill & Predict)
+        if test_high_risk:
+            # Create a "Burnout" profile
+            input_data = {
+                'satisfaction_level': 0.1, 
+                'last_evaluation': 0.7,
+                'number_project': 7,       # High
+                'average_montly_hours': 310, # Very High
+                'time_spend_company': 4,
+                'Work_accident': 1,
+                'promotion_last_5years': 0,
+                'Department': Department,
+                'salary': 'low'
+            }
+            input_df = pd.DataFrame([input_data])
+            
+            with st.spinner('Simulating high-risk scenario...'):
+                sleep(1); prediction = pipeline.predict(input_df)[0]; prediction_probas = pipeline.predict_proba(input_df)[0]
+                
+                st.session_state.prediction_result = prediction
+                st.session_state.input_df = input_df
+                st.session_state.prediction_probas = prediction_probas
+                st.toast("High-Risk Profile Loaded", icon="🔥")
 
         if st.session_state.prediction_result is not None:
             st.markdown("---")
