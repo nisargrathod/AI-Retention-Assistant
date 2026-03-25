@@ -885,35 +885,30 @@ def main():
                 # 2. Select Employee
                 selected_idx = st.selectbox("Select At-Risk Employee", high_risk_indices, format_func=lambda x: f"Employee ID: {x}")
                 
-                if st.button("Generate Counterfactuals", type="primary"):
+                                if st.button("Generate Counterfactuals", type="primary"):
                     with st.spinner("🔮 Calculating minimal interventions..."):
                         try:
-                            # Prepare Data for DiCE
-                            # DiCE needs the raw dataframe (before encoding) and a list of continuous features
-                            query_instance = df.loc[[selected_idx]].drop('left', axis=1)
+                            # --- FIX: DO NOT DROP 'left' HERE ---
+                            # DiCE needs the full dataframe to identify the outcome column correctly
+                            query_instance = df.loc[[selected_idx]] 
                             
                             continuous_features = ['satisfaction_level', 'last_evaluation', 'number_project', 'average_montly_hours', 'time_spend_company']
                             
-                            # Setup DiCE
-                            # backend='sklearn' works with our Pipeline directly!
-                            d = dice_ml.Data(dataframe=df.drop('left', axis=1), continuous_features=continuous_features, outcome_name='left')
+                            # --- FIX: USE FULL 'df' (do not drop 'left') ---
+                            # DiCE will use 'outcome_name' to separate features from target internally
+                            d = dice_ml.Data(dataframe=df, continuous_features=continuous_features, outcome_name='left')
                             m = dice_ml.Model(model=pipeline, backend='sklearn')
                             
                             # Generate Counterfactuals
                             exp = Dice(d, m, method='random')
-                            # We want 3 diverse scenarios to flip the class
                             cf = exp.generate_counterfactuals(query_instance, total_CFs=3, desired_class="opposite")
                             
                             # 3. Display Results (HR Friendly Format)
                             st.success(f"✨ Success! Here are 3 scenarios to keep Employee **{selected_idx}**:")
                             
-                            # Convert to pandas for easier display
                             cf_df = cf.cf_examples_list[0].final_cfs_df
-                            
-                            # Reset index for clean display
                             original = query_instance.iloc[0]
                             
-                            # Create a display comparison
                             scenarios = []
                             for i in range(len(cf_df)):
                                 changes = []
@@ -957,7 +952,6 @@ def main():
                             st.error("❌ Library `dice-ml` not found. Please run `pip install dice-ml` in your terminal.")
                         except Exception as e:
                             st.error(f"⚠️ An error occurred: {e}")
-                            st.write("Debug Info:", e)
 
         # --- TAB 3: FAIRNESS AUDIT (Placeholder) ---
         with tab3:
