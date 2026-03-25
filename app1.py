@@ -174,7 +174,7 @@ st.markdown("""
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
-        title={"font": {"size": title_size, "family": "tahoma"}},  # Fix applied here in Step 1
+        title={"font": {"size": title_size, "family": "tahoma"}},
         hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"},
         paper_bgcolor="#0E1117",
         plot_bgcolor="#161b22",
@@ -199,7 +199,7 @@ def bar_plot(the_df, column, orientation="v", top_10=False):
                  y=dep.values,
                  orientation=orientation,
                  color=dep.index.astype(str),
-                 title=f'Observations Distribution Via {column.title().replace("_", " ")}', # Fix applied here in Step 2
+                 title=f'Observations Distribution Via {column.title().replace("_", " ")}',
                  color_discrete_sequence=["#17B794"],
                  labels={"x": column.title().replace("_", " "),
                          "y": "Count of Employees"},
@@ -271,7 +271,10 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
                 cols_index.append(i)
 
     if len(cols_index) > 0:
-        tabs = st.tabs([str(num_columns[i].title().replace("_", " ") for i in cols_index])
+        # ====================================================================
+        # FIX APPLIED HERE (Line 274): Closed the parenthesis correctly and removed redundant str()
+        # ====================================================================
+        tabs = st.tabs([num_columns[i].title().replace("_", " ") for i in cols_index])
         for i in range(len(cols_index)):
             tabs[i].plotly_chart(figs[i], use_container_width=True)
 
@@ -706,11 +709,18 @@ def main():
         if predict_button:
             satisfaction_level = satisfaction_map[satisfaction_text]; last_evaluation = evaluation_map[evaluation_text]
             Work_accident = 1 if work_accident_text == 'Yes' else 0; promotion_last_5years = 1 if promotion_text == 'Yes' else 0
-            # FIX: Dictionary Syntax Error (Step 2)
-            input_data = {'satisfaction_level': satisfaction_level, 'last_evaluation': last_evaluation,
-                          'number_project': number_project, 'average_montly_hours': average_montly_hours, # Fixed Syntax
-                          'time_spend_company': time_spend_company, 'Work_accident': Work_accident,
-                          'promotion_last_5years': promotion_last_5years, 'Department': Department, 'salary': salary}
+            
+            input_data = {
+                'satisfaction_level': satisfaction_level, 
+                'last_evaluation': last_evaluation,
+                'number_project': number_project, 
+                'average_montly_hours': average_montly_hours, 
+                'time_spend_company': time_spend_company, 
+                'Work_accident': Work_accident,
+                'promotion_last_5years': promotion_last_5years, 
+                'Department': Department, 
+                'salary': salary
+            }
             input_df = pd.DataFrame([input_data])
             
             with st.spinner('AI is analyzing...'):
@@ -1099,12 +1109,12 @@ def main():
                         fig, ax = plt.subplots(figsize=(10, 5))
                         metric_frame.by_group.plot.bar(y="selection_rate", ax=ax, legend=False, color='#17B794')
                         ax.set_title(f"Selection Rate by {sensitive_feature.title()}", color='white')
-        ax.set_xlabel(sensitive_feature.title(), color='white')
-        ax.tick_params(axis='x', colors='white')
-        ax.tick_params(axis='y', colors='white')
-        ax.spines['bottom'].set_color('white')
-        ax.spines['left'].set_color('white')
-        st.pyplot(fig)
+                        ax.set_xlabel(sensitive_feature.title(), color='white')
+                        ax.tick_params(axis='x', colors='white')
+                        ax.tick_params(axis='y', colors='white')
+                        ax.spines['bottom'].set_color('white')
+                        ax.spines['left'].set_color('white')
+                        st.pyplot(fig)
                         
                         # Display Difference Metric
                         diff_dp = metric_frame.demographic_parity_difference()
@@ -1120,12 +1130,12 @@ def main():
                         fig2, ax2 = plt.subplots(figsize=(10, 5))
                         metric_frame.by_group.plot.bar(y="true_positive_rate", ax=ax2, legend=False, color='#EEB76B')
                         ax2.set_title(f"True Positive Rate by {sensitive_feature.title()}", color='white')
-        ax2.set_xlabel(sensitive_feature.title(), color='white')
-        ax2.tick_params(axis='x', colors='white')
-        ax2.tick_params(axis='y', colors='white')
-        ax2.spines['bottom'].set_color('white')
-        ax2.spines['left'].set_color('white')
-        st.pyplot(fig2)
+                        ax2.set_xlabel(sensitive_feature.title(), color='white')
+                        ax2.tick_params(axis='x', colors='white')
+                        ax2.tick_params(axis='y', colors='white')
+                        ax2.spines['bottom'].set_color('white')
+                        ax2.spines['left'].set_color('white')
+                        st.pyplot(fig2)
 
                         # Display Difference Metric
                         diff_eo = metric_frame.equalized_odds_difference()
