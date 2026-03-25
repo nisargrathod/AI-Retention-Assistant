@@ -971,7 +971,7 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (UPDATED: REAL FAIRNESS AUDIT)
+    # Page: AI Research Lab (UPDATED: REAL FAIRNESS AUDIT - FIXED)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
@@ -1081,10 +1081,10 @@ def main():
                     with st.spinner("Calculating bias metrics..."):
                         y_pred = pipeline.predict(X_test_cur)
                         
-                        # Create MetricFrame
+                        # FIX: Use double brackets [[ ]] to ensure it is a DataFrame
                         metric_frame = MetricFrame(y_true=y_test,
                                                      y_pred=y_pred,
-                                                     sensitive_features=X_test_cur[sensitive_feature])
+                                                     sensitive_features=X_test_cur[[sensitive_feature]])
                         
                         # --- 1. SELECTION RATE (Demographic Parity) ---
                         st.markdown("#### 📊 Demographic Parity (Selection Rate)")
