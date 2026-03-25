@@ -971,7 +971,7 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (UPDATED: REAL FAIRNESS AUDIT - FIXED)
+    # Page: AI Research Lab (UPDATED: REAL FAIRNESS AUDIT - INDEX FIX)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
@@ -1054,7 +1054,7 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall, minimizing both False Positives and False Negatives.")
 
-        # --- TAB 2: REAL FAIRNESS AUDIT ---
+        # --- TAB 2: REAL FAIRNESS AUDIT (FIXED) ---
         with tab2:
             st.subheader("⚖️ Algorithmic Fairness Audit")
             
@@ -1079,11 +1079,15 @@ def main():
                 
                 if st.button("🚀 Run Fairness Audit", type="primary"):
                     with st.spinner("Calculating bias metrics..."):
-                        y_pred = pipeline.predict(X_test_cur)
+                        y_pred_raw = pipeline.predict(X_test_cur)
                         
-                        # FIX: Use double brackets [[ ]] to ensure it is a DataFrame
-                        metric_frame = MetricFrame(y_true=y_test,
-                                                     y_pred=y_pred,
+                        # --- CRITICAL FIX: INDEX ALIGNMENT ---
+                        # MetricFrame crashes if indices don't match. We force them to match using X_test_cur.index.
+                        y_test_series = pd.Series(y_test, index=X_test_cur.index)
+                        y_pred_series = pd.Series(y_pred_raw, index=X_test_cur.index)
+                        
+                        metric_frame = MetricFrame(y_true=y_test_series,
+                                                     y_pred=y_pred_series,
                                                      sensitive_features=X_test_cur[[sensitive_feature]])
                         
                         # --- 1. SELECTION RATE (Demographic Parity) ---
