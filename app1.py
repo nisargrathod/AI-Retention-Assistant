@@ -32,9 +32,16 @@ from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-# --- Imports for AI Research Lab (Counterfactuals) ---
+# --- Imports for AI Research Lab (Counterfactuals & Fairness) ---
 import dice_ml
 from dice_ml import Dice
+
+# --- Imports for Fairness Audit (NEW) ---
+try:
+    from fairlearn.metrics import MetricFrame, demographic_parity_difference, equalized_odds_difference
+    FAIRLEARN_AVAILABLE = True
+except ImportError:
+    FAIRLEARN_AVAILABLE = False
 # ====================================================================
 
 # ====================================================================
@@ -482,9 +489,6 @@ def main():
         # Progress 3
         st.write("🤖 Step 3/3: Training AI Model (LightGBM)...")
         
-        # --- FIX: Aggressive Sensitivity Settings ---
-        # We manually set scale_pos_weight to ~15 to force the model to detect attrition more easily.
-        # This prevents the "Always Stay" issue by heavily penalizing missed 'Leave' cases.
         best_params = {
             'n_estimators': 500, 
             'learning_rate': 0.05, 
@@ -493,7 +497,7 @@ def main():
             'random_state': 42,
             'verbose': -1,
             'class_weight': 'balanced',
-            'scale_pos_weight': 15  # <--- FORCE SENSITIVITY TO 'LEAVE' CLASS
+            'scale_pos_weight': 15
         }
         
         final_pipeline = Pipeline(steps=[
@@ -643,7 +647,7 @@ def main():
         st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess risk and get retention strategies.</p>", unsafe_allow_html=True)
         
-        # --- NEW: MODEL DIAGNOSTICS ---
+        # --- MODEL DIAGNOSTICS ---
         with st.expander("🧪 Model Diagnostics (Verification)", expanded=False):
             st.write("Not sure if the AI is working? Test it against real historical data:")
             c_test1, c_test2 = st.columns(2)
@@ -694,7 +698,6 @@ def main():
             with col_btn1:
                 predict_button = st.form_submit_button(label='🔮 Analyze Employee', type='primary')
             with col_btn2:
-                # --- NEW: ONE-CLICK HIGH RISK TEST ---
                 test_high_risk = st.form_submit_button(label='🔥 Simulate High-Risk Employee', type='secondary')
 
         if 'prediction_result' not in st.session_state:
@@ -719,14 +722,13 @@ def main():
                 st.session_state.input_df = input_df
                 st.session_state.prediction_probas = prediction_probas
 
-        # Handle High Risk Simulation (Auto-fill & Predict)
+        # Handle High Risk Simulation
         if test_high_risk:
-            # Create a "Burnout" profile
             input_data = {
                 'satisfaction_level': 0.1, 
                 'last_evaluation': 0.7,
-                'number_project': 7,       # High
-                'average_montly_hours': 310, # Very High
+                'number_project': 7,       
+                'average_montly_hours': 310, 
                 'time_spend_company': 4,
                 'Work_accident': 1,
                 'promotion_last_5years': 0,
@@ -969,13 +971,12 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (Updated - Removed Counterfactuals Tab)
+    # Page: AI Research Lab (UPDATED: REAL FAIRNESS AUDIT)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
         st.markdown("<p style='color: #9ca3af;'>Experimental modules for Model Explainability, Fairness, and Benchmarking.</p>", unsafe_allow_html=True)
         
-        # --- UPDATED TABS (Removed Counterfactuals) ---
         tab1, tab2 = st.tabs(["📊 Model Benchmarking", "⚖️ Fairness Audit"])
         
         # --- TAB 1: MODEL BENCHMARKING (Fully Implemented) ---
@@ -1053,23 +1054,90 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall, minimizing both False Positives and False Negatives.")
 
-        # --- TAB 2: FAIRNESS AUDIT (Placeholder) ---
+        # --- TAB 2: REAL FAIRNESS AUDIT ---
         with tab2:
             st.subheader("⚖️ Algorithmic Fairness Audit")
-            st.info("⚖️ **Ethical AI:** This module checks for demographic parity. Is the model biased against specific Departments or Salary Tiers?")
             
-            st.write("""
-            *Metrics Monitored:*
-            - **Demographic Parity Difference:** Are selection rates equal across groups?
-            - **Equalized Odds:** Are True Positive Rates equal across groups?
-            
-            **Implementation Note:** To enable this, install: `pip install fairlearn`
-            """)
-            
-            with st.expander("🔧 Run Bias Check (Mock)"):
-                sensitive_feature = st.selectbox("Check Bias By", ['Department', 'Salary'])
-                if st.button("Audit Fairness"):
-                    st.warning("⚠️ This requires the `fairlearn` library integration to function with real data.")
+            if not FAIRLEARN_AVAILABLE:
+                st.error("❌ Library Missing")
+                st.markdown("""
+                The `fairlearn` library is required to run real-time bias audits.
+                
+                **To fix this:**
+                1. Open your `requirements.txt` file.
+                2. Add this line: `fairlearn`
+                3. Push to GitHub and redeploy.
+                
+                Alternatively, run in your terminal:
+                `pip install fairlearn`
+                """)
+            else:
+                st.success("✅ System Ready. `fairlearn` detected.")
+                st.write("Analyze if the AI predictions are biased against specific groups (e.g., Departments, Salary Levels).")
+                
+                sensitive_feature = st.selectbox("Select Sensitive Feature", ['salary', 'Department'])
+                
+                if st.button("🚀 Run Fairness Audit", type="primary"):
+                    with st.spinner("Calculating bias metrics..."):
+                        y_pred = pipeline.predict(X_test_cur)
+                        
+                        # Create MetricFrame
+                        metric_frame = MetricFrame(y_true=y_test,
+                                                     y_pred=y_pred,
+                                                     sensitive_features=X_test_cur[sensitive_feature])
+                        
+                        # --- 1. SELECTION RATE (Demographic Parity) ---
+                        st.markdown("#### 📊 Demographic Parity (Selection Rate)")
+                        st.write("The percentage of employees predicted to 'Leave' within each group.")
+                        
+                        fig, ax = plt.subplots(figsize=(10, 5))
+                        metric_frame.by_group.plot.bar(y="selection_rate", ax=ax, legend=False, color='#17B794')
+                        ax.set_title(f"Selection Rate by {sensitive_feature.title()}", color='white')
+                        ax.set_xlabel(sensitive_feature.title(), color='white')
+                        ax.tick_params(axis='x', colors='white')
+                        ax.tick_params(axis='y', colors='white')
+                        ax.spines['bottom'].set_color('white')
+                        ax.spines['left'].set_color('white')
+                        st.pyplot(fig)
+                        
+                        # Display Difference Metric
+                        diff_dp = metric_frame.demographic_parity_difference()
+                        st.metric("Demographic Parity Difference", f"{diff_dp:.3f}", 
+                                 delta="Difference between max and min selection rate")
+                        
+                        st.markdown("---")
+                        
+                        # --- 2. EQUALIZED ODDS (True Positive Rate) ---
+                        st.markdown("#### 🎯 Equalized Odds (True Positive Rate)")
+                        st.write("The percentage of actual 'Leavers' correctly identified by the AI within each group.")
+                        
+                        fig2, ax2 = plt.subplots(figsize=(10, 5))
+                        metric_frame.by_group.plot.bar(y="true_positive_rate", ax=ax2, legend=False, color='#EEB76B')
+                        ax2.set_title(f"True Positive Rate by {sensitive_feature.title()}", color='white')
+                        ax2.set_xlabel(sensitive_feature.title(), color='white')
+                        ax2.tick_params(axis='x', colors='white')
+                        ax2.tick_params(axis='y', colors='white')
+                        ax2.spines['bottom'].set_color('white')
+                        ax2.spines['left'].set_color('white')
+                        st.pyplot(fig2)
+
+                        # Display Difference Metric
+                        diff_eo = metric_frame.equalized_odds_difference()
+                        st.metric("Equalized Odds Difference", f"{diff_eo:.3f}",
+                                 delta="Difference in accuracy across groups")
+
+                        # --- INTERPRETATION ---
+                        st.markdown("---")
+                        st.markdown("### 💡 Interpretation")
+                        st.info(f"""
+                        **Demographic Parity Difference ({diff_dp:.3f}):**
+                        - Ideally, this should be close to **0.00**.
+                        - A high positive number means the AI is biased toward predicting 'Leave' for one specific group more than others.
+                        
+                        **Equalized Odds Difference ({diff_eo:.3f}):**
+                        - Ideally, this should be close to **0.00**.
+                        - If high, the AI is significantly better at catching leavers in one group compared to another.
+                        """)
 
 if __name__ == "__main__":
     main()
