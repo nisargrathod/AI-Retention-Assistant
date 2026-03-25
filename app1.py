@@ -481,13 +481,17 @@ def main():
         
         # Progress 3
         st.write("🤖 Step 3/3: Training AI Model (LightGBM)...")
+        
+        # --- FIX: Added class_weight='balanced' to handle Imbalance ---
+        # This ensures the AI doesn't just predict "Stay" for everyone
         best_params = {
             'n_estimators': 500, 
             'learning_rate': 0.05, 
             'num_leaves': 31, 
             'max_depth': 10, 
             'random_state': 42,
-            'verbose': -1
+            'verbose': -1,
+            'class_weight': 'balanced'  # <--- CRITICAL FIX
         }
         
         final_pipeline = Pipeline(steps=[
@@ -631,12 +635,41 @@ def main():
         st.plotly_chart(create_heat_map(df), use_container_width=True)
 
     # ====================================================================
-    # UPDATED: Predict Attrition with Integrated Counterfactuals (HR Friendly)
+    # UPDATED: Predict Attrition with Model Verification
     # ====================================================================
     if page == "Predict Attrition":
         st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess risk and get retention strategies.</p>", unsafe_allow_html=True)
         
+        # --- NEW: MODEL DIAGNOSTICS ---
+        with st.expander("🧪 Model Diagnostics (Verification)", expanded=False):
+            st.write("Not sure if the AI is working? Test it against real historical data:")
+            c_test1, c_test2 = st.columns(2)
+            
+            with c_test1:
+                if st.button("Test with Employee who Left"):
+                    sample = df[df['left'] == 1].iloc[0]
+                    test_df = sample.drop('left').to_frame().T
+                    pred = pipeline.predict(test_df)[0]
+                    if pred == 1:
+                        st.success("✅ **Correct!** The AI correctly identified this employee as 'Leave'.")
+                    else:
+                        st.error("❌ **Incorrect.** The AI failed to identify this employee as 'Leave'.")
+                    st.json(sample.to_dict(), expanded=False)
+
+            with c_test2:
+                if st.button("Test with Employee who Stayed"):
+                    sample = df[df['left'] == 0].iloc[0]
+                    test_df = sample.drop('left').to_frame().T
+                    pred = pipeline.predict(test_df)[0]
+                    if pred == 0:
+                        st.success("✅ **Correct!** The AI correctly identified this employee as 'Stay'.")
+                    else:
+                        st.error("❌ **Incorrect.** The AI failed to identify this employee as 'Stay'.")
+                    st.json(sample.to_dict(), expanded=False)
+
+        st.markdown("---")
+
         with st.form("Predict_value_form"):
             satisfaction_map = {'Very Dissatisfied': 0.1, 'Deshorted': 0.3, 'Neutral': 0.5, 'Satisfied': 0.7, 'Very Satisfied': 0.9}
             evaluation_map = {'Needs Improvement': 0.4, 'Meets Expectations': 0.7, 'Exceeds Expectations': 0.9}
@@ -901,13 +934,14 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab
+    # Page: AI Research Lab (Updated - Removed Counterfactuals Tab)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
         st.markdown("<p style='color: #9ca3af;'>Experimental modules for Model Explainability, Fairness, and Benchmarking.</p>", unsafe_allow_html=True)
         
-        tab1, tab2, tab3 = st.tabs(["📊 Model Benchmarking", "🔮 Counterfactuals", "⚖️ Fairness Audit"])
+        # --- UPDATED TABS (Removed Counterfactuals) ---
+        tab1, tab2 = st.tabs(["📊 Model Benchmarking", "⚖️ Fairness Audit"])
         
         # --- TAB 1: MODEL BENCHMARKING (Fully Implemented) ---
         with tab1:
@@ -984,20 +1018,8 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall, minimizing both False Positives and False Negatives.")
 
-        # --- TAB 2: COUNTERFACTUALS (Updated Text) ---
+        # --- TAB 2: FAIRNESS AUDIT (Placeholder) ---
         with tab2:
-            st.subheader("🔮 What-If Simulator")
-            st.info("✨ **Moved for Better Workflow!**")
-            st.write("""
-            The **Counterfactuals (What-If) Simulator** has been integrated directly into the **'Predict Attrition'** tab.
-            
-            This allows you to see retention strategies immediately after predicting an employee's risk, without navigating away.
-            
-            👉 Go to **Predict Attrition**, fill out the form, and click **"Show Me How to Keep Them"** to use this feature.
-            """)
-
-        # --- TAB 3: FAIRNESS AUDIT (Placeholder) ---
-        with tab3:
             st.subheader("⚖️ Algorithmic Fairness Audit")
             st.info("⚖️ **Ethical AI:** This module checks for demographic parity. Is the model biased against specific Departments or Salary Tiers?")
             
