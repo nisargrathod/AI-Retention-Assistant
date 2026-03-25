@@ -13,3 +13,4 @@ evidently
 langchain
 langchain-groq
 dice-ml
+fairlearn
