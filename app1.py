@@ -154,7 +154,7 @@ st.markdown("""
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
-        title={"font": {"size": title_size, "family": "tahoma"}}, # Fixed Syntax
+        title={"font": {"size": title_size, "family": "tahoma"}}, 
         hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"},
         paper_bgcolor="#0E1117",
         plot_bgcolor="#161b22",
@@ -468,7 +468,6 @@ def main():
         
         # Progress 3
         st.write("🤖 Step 3/3: Training AI Model (LightGBM)...")
-        # REDUCED n_estimators for faster loading
         best_params = {
             'n_estimators': 500, 
             'learning_rate': 0.05, 
@@ -488,7 +487,7 @@ def main():
 
     # Execute Loading
     pipeline, df, X_train_ref, X_test_cur, y_train, y_test, preprocessor, cat_feat, num_feat = load_data_and_train_model()
-    st.empty() # Clear progress text
+    st.empty()
 
     @st.cache_data
     def get_shap_explanations(_pipeline, _df):
@@ -618,9 +617,13 @@ def main():
         create_vizualization(df, viz_type="pie")
         st.plotly_chart(create_heat_map(df), use_container_width=True)
 
+    # ====================================================================
+    # UPDATED: Predict Attrition with Integrated Counterfactuals
+    # ====================================================================
     if page == "Predict Attrition":
         st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess risk.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess risk and get retention strategies.</p>", unsafe_allow_html=True)
+        
         with st.form("Predict_value_form"):
             satisfaction_map = {'Very Dissatisfied': 0.1, 'Deshorted': 0.3, 'Neutral': 0.5, 'Satisfied': 0.7, 'Very Satisfied': 0.9}
             evaluation_map = {'Needs Improvement': 0.4, 'Meets Expectations': 0.7, 'Exceeds Expectations': 0.9}
@@ -638,27 +641,97 @@ def main():
                 salary = st.selectbox('Salary', df['salary'].unique())
             predict_button = st.form_submit_button(label='🔮 Analyze Employee')
 
+        # Store results in session state to persist across button clicks
+        if 'prediction_result' not in st.session_state:
+            st.session_state.prediction_result = None
+            st.session_state.input_df = None
+            st.session_state.prediction_probas = None
+
         if predict_button:
             satisfaction_level = satisfaction_map[satisfaction_text]; last_evaluation = evaluation_map[evaluation_text]
             Work_accident = 1 if work_accident_text == 'Yes' else 0; promotion_last_5years = 1 if promotion_text == 'Yes' else 0
             input_data = {'satisfaction_level': satisfaction_level, 'last_evaluation': last_evaluation,
-                          'number_project': number_project, 'average_montly_hours': average_montly_hours, # Fixed Syntax
+                          'number_project': number_project, 'average_montly_hours': average_montly_hours,
                           'time_spend_company': time_spend_company, 'Work_accident': Work_accident,
                           'promotion_last_5years': promotion_last_5years, 'Department': Department, 'salary': salary}
             input_df = pd.DataFrame([input_data])
+            
             with st.spinner('AI is analyzing...'):
                 sleep(1); prediction = pipeline.predict(input_df)[0]; prediction_probas = pipeline.predict_proba(input_df)[0]
+                
+                # Save to session state
+                st.session_state.prediction_result = prediction
+                st.session_state.input_df = input_df
+                st.session_state.prediction_probas = prediction_probas
+
+        # Display Results
+        if st.session_state.prediction_result is not None:
+            st.markdown("---")
+            pred_col, stay_prob_col, leave_prob_col = st.columns(3)
+            with pred_col:
+                if st.session_state.prediction_result == 0: st.markdown("<div class='custom-card' style='text-align: center; border: 1px solid #17B794;'><h2 style='color: #17B794;'>STAY</h2><p>Employee is likely to stay.</p></div>", unsafe_allow_html=True)
+                else: st.markdown("<div class='custom-card' style='text-align: center; border: 1px solid #FF4B4B;'><h2 style='color: #FF4B4B;'>LEAVE</h2><p>High risk of attrition.</p></div>", unsafe_allow_html=True)
+            with stay_prob_col: st.metric("Stay Probability", f"{st.session_state.prediction_probas[0]:.1%}")
+            with leave_prob_col: st.metric("Leave Probability", f"{st.session_state.prediction_probas[1]:.1%}")
+            
+            if st.session_state.prediction_result == 1:
                 st.markdown("---")
-                pred_col, stay_prob_col, leave_prob_col = st.columns(3)
-                with pred_col:
-                    if prediction == 0: st.markdown("<div class='custom-card' style='text-align: center; border: 1px solid #17B794;'><h2 style='color: #17B794;'>STAY</h2><p>Employee is likely to stay.</p></div>", unsafe_allow_html=True)
-                    else: st.markdown("<div class='custom-card' style='text-align: center; border: 1px solid #FF4B4B;'><h2 style='color: #FF4B4B;'>LEAVE</h2><p>High risk of attrition.</p></div>", unsafe_allow_html=True)
-                with stay_prob_col: st.metric("Stay Probability", f"{prediction_probas[0]:.1%}")
-                with leave_prob_col: st.metric("Leave Probability", f"{prediction_probas[1]:.1%}")
-                if prediction == 1:
-                    st.markdown("---")
-                    st.markdown("### 💡 Recommended Actions")
-                    for rec in get_retention_strategies(input_df): st.info(rec)
+                st.markdown("### 💡 Recommended Actions")
+                for rec in get_retention_strategies(st.session_state.input_df): st.info(rec)
+
+                # --- NEW INTEGRATED COUNTERFACTUALS SECTION ---
+                st.markdown("---")
+                st.markdown("### 🔮 What-If Simulator (Counterfactuals)")
+                st.write("<p style='color: #9ca3af; margin-bottom: 15px;'>The AI has calculated 3 minimal scenarios to change this prediction from 'Leave' to 'Stay'.</p>", unsafe_allow_html=True)
+                
+                if st.button("💡 Generate Retention Scenarios", type="primary", key="gen_cf"):
+                    with st.spinner("Simulating outcomes..."):
+                        try:
+                            query_instance = st.session_state.input_df
+                            continuous_features = ['satisfaction_level', 'last_evaluation', 'number_project', 'average_montly_hours', 'time_spend_company']
+                            
+                            # DiCE Setup
+                            d = dice_ml.Data(dataframe=df, continuous_features=continuous_features, outcome_name='left')
+                            m = dice_ml.Model(model=pipeline, backend='sklearn')
+                            
+                            exp = Dice(d, m, method='random')
+                            cf = exp.generate_counterfactuals(query_instance, total_CFs=3, desired_class="opposite")
+                            
+                            cf_df = cf.cf_examples_list[0].final_cfs_df
+                            original = query_instance.iloc[0]
+                            
+                            scenarios = []
+                            for i in range(len(cf_df)):
+                                changes = []
+                                cf_row = cf_df.iloc[i]
+                                for col in original.index:
+                                    orig_val = original[col]
+                                    new_val = cf_row[col]
+                                    if isinstance(orig_val, float):
+                                        if abs(orig_val - new_val) > 0.05:
+                                            changes.append(f"• **{col.replace('_', ' ').title()}**: {orig_val:.2f} ➝ {new_val:.2f}")
+                                    else:
+                                        if orig_val != new_val:
+                                            changes.append(f"• **{col.replace('_', ' ').title()}**: {orig_val} ➝ {new_val}")
+                                if changes: scenarios.append("\n".join(changes))
+                                else: scenarios.append("• (No significant changes detected)")
+
+                            col_s1, col_s2, col_s3 = st.columns(3)
+                            cols_list = [col_s1, col_s2, col_s3]
+                            
+                            for i, scenario in enumerate(scenarios):
+                                with cols_list[i]:
+                                    st.markdown(f"""
+                                    <div class="custom-card" style="border-color: #EEB76B;">
+                                        <h4 style="color: #EEB76B; margin-top:0;">Scenario {i+1}</h4>
+                                        <p style="font-size: 0.9rem; line-height: 1.4;">
+                                            {scenario}
+                                        </p>
+                                        <small style="color: #8b949e;">Result: Prediction changes to <strong>STAY</strong></small>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                        except Exception as e:
+                            st.error(f"Error generating scenarios: {e}")
 
     if page == "Why They Leave":
         st.header("🧠 Key Attrition Drivers")
@@ -783,7 +856,7 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (M.Tech Level Additions)
+    # Page: AI Research Lab
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
@@ -866,91 +939,17 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall, minimizing both False Positives and False Negatives.")
 
-        # --- TAB 2: COUNTERFACTUALS (Fully Implemented with DiCE) ---
+        # --- TAB 2: COUNTERFACTUALS (Updated Text) ---
         with tab2:
-            st.subheader("🔮 What-If Simulator (Counterfactuals)")
-            st.markdown("<p style='color: #9ca3af;'>Generates minimal changes required to flip a prediction from 'Leave' to 'Stay'.</p>", unsafe_allow_html=True)
+            st.subheader("🔮 What-If Simulator")
+            st.info("✨ **Moved for Better Workflow!**")
+            st.write("""
+            The **Counterfactuals (What-If) Simulator** has been integrated directly into the **'Predict Attrition'** tab.
             
-            # 1. Identify High Risk Employees (Real Data)
-            X_all = df.drop('left', axis=1)
-            # Predict on all data to find leavers
-            predictions = pipeline.predict(X_all)
-            high_risk_indices = df[predictions == 1].index
+            This allows you to see retention strategies immediately after predicting an employee's risk, without navigating away.
             
-            if len(high_risk_indices) == 0:
-                st.info("✅ No employees are currently predicted to leave by the model.")
-            else:
-                st.write(f"Found **{len(high_risk_indices)}** employees predicted to leave. Select one to analyze:")
-                
-                # 2. Select Employee
-                selected_idx = st.selectbox("Select At-Risk Employee", high_risk_indices, format_func=lambda x: f"Employee ID: {x}")
-                
-                if st.button("Generate Counterfactuals", type="primary"):
-                    with st.spinner("🔮 Calculating minimal interventions..."):
-                        try:
-                            # --- FIX 1: The Data Object needs the FULL dataframe (so it sees 'left') ---
-                            continuous_features = ['satisfaction_level', 'last_evaluation', 'number_project', 'average_montly_hours', 'time_spend_company']
-                            
-                            d = dice_ml.Data(dataframe=df, continuous_features=continuous_features, outcome_name='left')
-                            m = dice_ml.Model(model=pipeline, backend='sklearn')
-                            
-                            # --- FIX 2: The Query Instance (the specific employee) must DROP 'left' ---
-                            # We only want to give the AI the features, not the answer, so it can calculate the change.
-                            query_instance = df.loc[[selected_idx]].drop('left', axis=1)
-                            
-                            # Generate Counterfactuals
-                            exp = Dice(d, m, method='random')
-                            cf = exp.generate_counterfactuals(query_instance, total_CFs=3, desired_class="opposite")
-                            
-                            # 3. Display Results (HR Friendly Format)
-                            st.success(f"✨ Success! Here are 3 scenarios to keep Employee **{selected_idx}**:")
-                            
-                            cf_df = cf.cf_examples_list[0].final_cfs_df
-                            original = df.loc[selected_idx] # We use the full row for comparison display
-                            
-                            scenarios = []
-                            for i in range(len(cf_df)):
-                                changes = []
-                                cf_row = cf_df.iloc[i]
-                                
-                                # Compare columns
-                                for col in original.index:
-                                    orig_val = original[col]
-                                    new_val = cf_row[col]
-                                    
-                                    # Only show significant changes (handling float precision)
-                                    if isinstance(orig_val, float):
-                                        if abs(orig_val - new_val) > 0.05:
-                                            changes.append(f"• **{col.replace('_', ' ').title()}**: {orig_val:.2f} ➝ {new_val:.2f}")
-                                    else:
-                                        if orig_val != new_val:
-                                            changes.append(f"• **{col.replace('_', ' ').title()}**: {orig_val} ➝ {new_val}")
-                                
-                                if changes:
-                                    scenarios.append("\n".join(changes))
-                                else:
-                                    scenarios.append("• (No significant changes detected)")
-
-                            # Display in Columns
-                            col_s1, col_s2, col_s3 = st.columns(3)
-                            cols_list = [col_s1, col_s2, col_s3]
-                            
-                            for i, scenario in enumerate(scenarios):
-                                with cols_list[i]:
-                                    st.markdown(f"""
-                                    <div class="custom-card" style="border-color: #EEB76B;">
-                                        <h4 style="color: #EEB76B; margin-top:0;">Scenario {i+1}</h4>
-                                        <p style="font-size: 0.9rem; line-height: 1.4;">
-                                            {scenario}
-                                        </p>
-                                        <small style="color: #8b949e;">Result: Prediction changes to <strong>STAY</strong></small>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                        except ImportError:
-                            st.error("❌ Library `dice-ml` not found. Please run `pip install dice-ml` in your terminal.")
-                        except Exception as e:
-                            st.error(f"⚠️ An error occurred: {e}")
+            👉 Go to **Predict Attrition**, fill out the form, and click **"Generate Retention Scenarios"** to use this feature.
+            """)
 
         # --- TAB 3: FAIRNESS AUDIT (Placeholder) ---
         with tab3:
