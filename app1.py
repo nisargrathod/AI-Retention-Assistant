@@ -145,6 +145,19 @@ st.markdown("""
         line-height: 1.6;
         white-space: pre-wrap;
     }
+
+    /* --- HR Friendly Action Item Styling --- */
+    .action-item {
+        background-color: #161b22;
+        padding: 8px;
+        margin-bottom: 8px;
+        border-left: 3px solid #17B794;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+    .action-item-high-effort {
+        border-left: 3px solid #FF4B4B; /* Red for high effort */
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -618,7 +631,7 @@ def main():
         st.plotly_chart(create_heat_map(df), use_container_width=True)
 
     # ====================================================================
-    # UPDATED: Predict Attrition with Integrated Counterfactuals
+    # UPDATED: Predict Attrition with Integrated Counterfactuals (HR Friendly)
     # ====================================================================
     if page == "Predict Attrition":
         st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
@@ -641,7 +654,6 @@ def main():
                 salary = st.selectbox('Salary', df['salary'].unique())
             predict_button = st.form_submit_button(label='🔮 Analyze Employee')
 
-        # Store results in session state to persist across button clicks
         if 'prediction_result' not in st.session_state:
             st.session_state.prediction_result = None
             st.session_state.input_df = None
@@ -659,12 +671,10 @@ def main():
             with st.spinner('AI is analyzing...'):
                 sleep(1); prediction = pipeline.predict(input_df)[0]; prediction_probas = pipeline.predict_proba(input_df)[0]
                 
-                # Save to session state
                 st.session_state.prediction_result = prediction
                 st.session_state.input_df = input_df
                 st.session_state.prediction_probas = prediction_probas
 
-        # Display Results
         if st.session_state.prediction_result is not None:
             st.markdown("---")
             pred_col, stay_prob_col, leave_prob_col = st.columns(3)
@@ -679,13 +689,13 @@ def main():
                 st.markdown("### 💡 Recommended Actions")
                 for rec in get_retention_strategies(st.session_state.input_df): st.info(rec)
 
-                # --- NEW INTEGRATED COUNTERFACTUALS SECTION ---
+                # --- NEW INTEGRATED COUNTERFACTUALS SECTION (HR FRIENDLY) ---
                 st.markdown("---")
-                st.markdown("### 🔮 What-If Simulator (Counterfactuals)")
-                st.write("<p style='color: #9ca3af; margin-bottom: 15px;'>The AI has calculated 3 minimal scenarios to change this prediction from 'Leave' to 'Stay'.</p>", unsafe_allow_html=True)
+                st.markdown("### 🔮 AI Retention Strategies (What-If Simulator)")
+                st.write("<p style='color: #9ca3af; margin-bottom: 15px;'>Here are 3 different ways to prevent this employee from leaving, ranked by feasibility.</p>", unsafe_allow_html=True)
                 
-                if st.button("💡 Generate Retention Scenarios", type="primary", key="gen_cf"):
-                    with st.spinner("Simulating outcomes..."):
+                if st.button("💡 Show Me How to Keep Them", type="primary", key="gen_cf"):
+                    with st.spinner("Simulating retention strategies..."):
                         try:
                             query_instance = st.session_state.input_df
                             continuous_features = ['satisfaction_level', 'last_evaluation', 'number_project', 'average_montly_hours', 'time_spend_company']
@@ -700,38 +710,73 @@ def main():
                             cf_df = cf.cf_examples_list[0].final_cfs_df
                             original = query_instance.iloc[0]
                             
-                            scenarios = []
+                            scenarios_html = []
                             for i in range(len(cf_df)):
                                 changes = []
                                 cf_row = cf_df.iloc[i]
+                                has_high_effort = False
+                                
                                 for col in original.index:
                                     orig_val = original[col]
                                     new_val = cf_row[col]
+                                    
+                                    # --- TRANSLATION LOGIC ---
                                     if isinstance(orig_val, float):
                                         if abs(orig_val - new_val) > 0.05:
-                                            changes.append(f"• **{col.replace('_', ' ').title()}**: {orig_val:.2f} ➝ {new_val:.2f}")
+                                            col_lower = col.lower()
+                                            action_text = ""
+                                            if 'satisfaction' in col_lower:
+                                                action_text = f"🤝 <strong>Boost Engagement</strong>: Improve satisfaction score from <strong>{orig_val:.2f}</strong> to <strong>{new_val:.2f}</strong> (via 1-on-1s, feedback, recognition)."
+                                            elif 'hours' in col_lower:
+                                                diff = orig_val - new_val
+                                                if diff > 0:
+                                                    action_text = f"⏰ <strong>Reduce Workload</strong>: Cut monthly hours by ~<strong>{abs(diff):.0f}</strong> to prevent burnout."
+                                                else:
+                                                    action_text = f"⏰ <strong>Increase Engagement</strong>: Adjust hours to ~<strong>{new_val:.0f}</strong>."
+                                            elif 'project' in col_lower:
+                                                action_text = f"📂 <strong>Rebalance Projects</strong>: Adjust project count to <strong>{int(new_val)}</strong>."
+                                            elif 'evaluation' in col_lower:
+                                                action_text = f"📊 <strong>Performance Coaching</strong>: Guide evaluation score to <strong>{new_val:.2f}</strong>."
+                                            else:
+                                                action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: Change from {orig_val:.2f} to {new_val:.2f}."
+                                            
+                                            if action_text: changes.append(action_text)
                                     else:
                                         if orig_val != new_val:
-                                            changes.append(f"• **{col.replace('_', ' ').title()}**: {orig_val} ➝ {new_val}")
-                                if changes: scenarios.append("\n".join(changes))
-                                else: scenarios.append("• (No significant changes detected)")
+                                            if 'department' in col.lower():
+                                                has_high_effort = True
+                                                action_text = f"🏢 <strong>Department Transfer</strong>: Move from <strong>{orig_val}</strong> to <strong>{new_val}</strong>. <span style='color:#FF4B4B;'>(High Effort)</span>"
+                                            else:
+                                                action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: Change from {orig_val} to {new_val}."
+                                            changes.append(action_text)
+                                
+                                if not changes: changes.append("• (AI suggests maintaining current status with minor supervision)")
+                                
+                                # Join changes into a clean list
+                                changes_str = "".join([f"<div class='action-item {'action-item-high-effort' if has_high_effort else ''}'>{c}</div>" for c in changes])
+                                
+                                scenarios_html.append(f"""
+                                    <div class="custom-card" style="border-color: #17B794;">
+                                        <h4 style="color: #17B794; margin-top:0;">Strategy {i+1}</h4>
+                                        <p style="color: #c9d1d9; font-size: 0.9rem; line-height: 1.6;">
+                                            {changes_str}
+                                        </p>
+                                        <div style="margin-top: 15px; border-top: 1px solid #30363d; padding-top: 10px;">
+                                            <small style="color: #17B794;"><strong>Result:</strong> If implemented, the AI predicts the employee will <strong>STAY</strong>.</small>
+                                        </div>
+                                    </div>
+                                """)
 
+                            # Display in Columns
                             col_s1, col_s2, col_s3 = st.columns(3)
                             cols_list = [col_s1, col_s2, col_s3]
                             
-                            for i, scenario in enumerate(scenarios):
+                            for i, html in enumerate(scenarios_html):
                                 with cols_list[i]:
-                                    st.markdown(f"""
-                                    <div class="custom-card" style="border-color: #EEB76B;">
-                                        <h4 style="color: #EEB76B; margin-top:0;">Scenario {i+1}</h4>
-                                        <p style="font-size: 0.9rem; line-height: 1.4;">
-                                            {scenario}
-                                        </p>
-                                        <small style="color: #8b949e;">Result: Prediction changes to <strong>STAY</strong></small>
-                                    </div>
-                                    """, unsafe_allow_html=True)
+                                    st.markdown(html, unsafe_allow_html=True)
+                                    
                         except Exception as e:
-                            st.error(f"Error generating scenarios: {e}")
+                            st.error(f"Error generating strategies: {e}")
 
     if page == "Why They Leave":
         st.header("🧠 Key Attrition Drivers")
@@ -948,7 +993,7 @@ def main():
             
             This allows you to see retention strategies immediately after predicting an employee's risk, without navigating away.
             
-            👉 Go to **Predict Attrition**, fill out the form, and click **"Generate Retention Scenarios"** to use this feature.
+            👉 Go to **Predict Attrition**, fill out the form, and click **"Show Me How to Keep Them"** to use this feature.
             """)
 
         # --- TAB 3: FAIRNESS AUDIT (Placeholder) ---
