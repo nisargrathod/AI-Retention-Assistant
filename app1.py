@@ -5,7 +5,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
 import numpy as np
-import plotly.express as px
+import plotly.explpress as px
 import shap
 import matplotlib.pyplot as plt
 import lightgbm as lgb
@@ -199,7 +199,7 @@ def bar_plot(the_df, column, orientation="v", top_10=False):
                  y=dep.values,
                  orientation=orientation,
                  color=dep.index.astype(str),
-                 title=f'Observations Distribution Via {column.title().replace("_", " ")}',
+                 title=f'Observations Distribution Via {column.title().replace("_', " ")}',
                  color_discrete_sequence=["#17B794"],
                  labels={"x": column.title().replace("_", " "),
                          "y": "Count of Employees"},
@@ -271,7 +271,7 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
                 cols_index.append(i)
 
     if len(cols_index) > 0:
-        tabs = st.tabs([str(num_columns[i]).title().replace("_", " ") for i in cols_index])
+        tabs = st.tabs([str(num_columns[i].title().replace("_", " ") for i in cols_index])
         for i in range(len(cols_index)):
             tabs[i].plotly_chart(figs[i], use_container_width=True)
 
@@ -620,7 +620,7 @@ def main():
                         Our AI compares current employee data against the training data. 
                         <br><br>
                         <strong>Stable (Green):</strong> The workforce trends match what the AI learned. Predictions are reliable.<br>
-                        <strong>Drift (Red):</strong> Significant changes (e.g., sudden salary hikes or policy changes) might make predictions less accurate.
+                        <strong>drift (Red):</strong> Significant changes (e.g., sudden salary hikes or policy changes) might make predictions less accurate.
                     </p>
                 </div>
                 """, unsafe_allow_html=True)
@@ -864,7 +864,7 @@ def main():
             def get_feature_advice(feature_name):
                 if 'satisfaction' in feature_name.lower(): return "Employee Morale", "Conduct regular engagement surveys."
                 elif 'project' in feature_name.lower(): return "Workload Balance", "Review project allocations."
-                elif 'time' in feature_name.lower() or 'tenure' in feature_name.lower(): return "Tenure", "Watch for turnover at 3-5 years."
+                elif 'time' in feature_name.lower() or 'tenanture' in feature_name.lower(): return "Tenure", "Watch for turnover at 3-5 years."
                 elif 'salary' in feature_name.lower(): return "Compensation", "Review market rates annually."
                 else: return "Performance", "Track evaluation scores."
 
@@ -971,7 +971,7 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (UPDATED: REAL FAIRNESS AUDIT - INDEX FIX)
+    # Page: AI Research Lab (UPDATED: REAL FAIRNESS AUDIT - INDEX-FIX)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
@@ -1054,7 +1054,7 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall, minimizing both False Positives and False Negatives.")
 
-        # --- TAB 2: REAL FAIRNESS AUDIT (FIXED) ---
+        # --- TAB 2: REAL FAIRNESS AUDIT (FIXED: INDEX-FREE) ---
         with tab2:
             st.subheader("⚖️ Algorithmic Fairness Audit")
             
@@ -1081,14 +1081,19 @@ def main():
                     with st.spinner("Calculating bias metrics..."):
                         y_pred_raw = pipeline.predict(X_test_cur)
                         
-                        # --- CRITICAL FIX: INDEX ALIGNMENT ---
-                        # MetricFrame crashes if indices don't match. We force them to match using X_test_cur.index.
-                        y_test_series = pd.Series(y_test, index=X_test_cur.index)
-                        y_pred_series = pd.Series(y_pred_raw, index=X_test_cur.index)
+                        # --- INDEX-FIX: Convert to Lists ---
+                        # MetricFrame crashes if indices don't match. 
+                        # We convert everything to simple lists to ignore index mismatches entirely.
+                        y_test_list = y_test.tolist()
+                        y_pred_list = y_pred_raw.tolist()
                         
-                        metric_frame = MetricFrame(y_true=y_test_series,
-                                                     y_pred=y_pred_series,
-                                                     sensitive_features=X_test_cur[[sensitive_feature]])
+                        # Extract the specific sensitive feature values as a list (not a DataFrame)
+                        sensitive_values = X_test_cur[sensitive_feature].tolist()
+                        
+                        # Run MetricFrame using lists
+                        metric_frame = MetricFrame(y_true=y_test_list,
+                                                     y_pred=y_pred_list,
+                                                     sensitive_features=sensitive_values)
                         
                         # --- 1. SELECTION RATE (Demographic Parity) ---
                         st.markdown("#### 📊 Demographic Parity (Selection Rate)")
@@ -1101,7 +1106,7 @@ def main():
                         ax.tick_params(axis='x', colors='white')
                         ax.tick_params(axis='y', colors='white')
                         ax.spines['bottom'].set_color('white')
-                        ax.spines['left'].set_color('white')
+        ax.spines['left'].set_color('white')
                         st.pyplot(fig)
                         
                         # Display Difference Metric
