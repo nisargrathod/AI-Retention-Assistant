@@ -968,13 +968,13 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (UPDATED: Segmented Explainability)
+    # Page: AI Research Lab (UPDATED: HR FRIENDLY SEGMENTED EXPLAINABILITY)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
         st.markdown("<p style='color: #9ca3af;'>Experimental modules for Model Explainability, Benchmarking, and Deep Learning.</p>", unsafe_allow_html=True)
         
-        tab1, tab2 = st.tabs(["📊 Model Benchmarking", "🔬 Segmented Explainability"])
+        tab1, tab2 = st.tabs(["📊 Model Benchmarking", "🔬 Departmental Strategy Deep Dive"])
         
         # --- TAB 1: MODEL BENCHMARKING ---
         with tab1:
@@ -1050,79 +1050,161 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall.")
 
-        # --- TAB 2: SEGMENTED EXPLAINABILITY (NEW FEATURE) ---
+        # --- TAB 2: SEGMENTED EXPLAINABILITY (HR FRIENDLY VERSION) ---
         with tab2:
-            st.subheader("🔬 Deep Dive: Why do specific departments leave?")
+            st.subheader("🔬 Departmental Strategy Deep Dive")
             st.markdown("""
             <p style='color: #9ca3af; margin-bottom: 20px;'>
-            Global importance tells you what matters overall. This tool tells you <strong>what matters specifically for each department</strong>.
-            <br>Example: Does 'Salary' drive attrition in Sales, while 'Hours' drives it in Tech?
+            Don't just guess why a team is struggling. Use AI to uncover the <strong>specific reasons</strong> why employees are leaving a particular department and get tailored strategies.
             </p>
             """, unsafe_allow_html=True)
             
-            # Get SHAP data (Cached)
-            shap_vals, X_proc_df = get_shap_explanations(pipeline, df)
+            # Selection
+            selected_dept_name = st.selectbox("Select Department to Analyze", options=sorted(df['Department'].unique()))
             
-            # Identify Department columns in the processed dataframe
-            dept_cols = [col for col in X_proc_df.columns if 'Department' in col]
-            
-            if not dept_cols:
-                st.error("No Department columns found in processed data.")
-            else:
-                # Map clean names back to readable format for selection
-                dept_map = {col: col.replace('Department ', '') for col in dept_cols}
-                selected_dept_col = st.selectbox("Select Department to Analyze", options=list(dept_map.keys()), format_func=lambda x: dept_map[x])
-                
-                if st.button("Analyze Department Drivers", type="primary"):
-                    with st.spinner("Computing localized feature importance..."):
-                        # 1. Identify rows belonging to this department (Value == 1)
-                        dept_mask = X_proc_df[selected_dept_col] == 1
+            if st.button("Generate Department Strategy", type="primary"):
+                with st.spinner("Analyzing departmental dynamics..."):
+                    
+                    # --- 1. CALCULATE DEPARTMENT CONTEXT (HR Metrics) ---
+                    dept_data = df[df['Department'] == selected_dept_name]
+                    dept_count = len(dept_data)
+                    dept_attrition = (dept_data['left'].sum() / dept_count) * 100
+                    company_attrition = (df['left'].sum() / len(df)) * 100
+                    delta = dept_attrition - company_attrition
+                    
+                    delta_color = "normal" if delta <= 0 else "inverse"
+                    delta_text = f"{delta:+.1f}% vs Company Avg"
+
+                    # Display Metrics
+                    c_m1, c_m2, c_m3 = st.columns(3)
+                    c_m1.metric(f"{selected_dept_name} Workforce", f"{dept_count} Employees")
+                    c_m2.metric("Attrition Rate", f"{dept_attrition:.1f}%", delta=delta_text, delta_color=delta_color)
+                    c_m3.metric("Risk Level", "High" if dept_attrition > 20 else "Moderate" if dept_attrition > 10 else "Low")
+                    
+                    st.markdown("---")
+
+                    # --- 2. GET AI INSIGHTS (SHAP) ---
+                    shap_vals, X_proc_df = get_shap_explanations(pipeline, df)
+                    
+                    # Identify the one-hot encoded column for this department
+                    target_col = f"Department {selected_dept_name}"
+                    
+                    if target_col not in X_proc_df.columns:
+                        st.error(f"Could not find data for {selected_dept_name} in the model features.")
+                    else:
+                        # Filter data for this department
+                        dept_mask = X_proc_df[target_col] == 1
                         
                         if dept_mask.sum() == 0:
-                            st.warning(f"No data found for {dept_map[selected_dept_col]} in the training set.")
+                             st.warning(f"Not enough data to analyze {selected_dept_name} specifically.")
                         else:
-                            # 2. Filter SHAP values for these rows
-                            # Handle binary classification SHAP output (list of 2 arrays)
+                            # Extract SHAP values for the positive class (Leaving)
                             if isinstance(shap_vals, list):
-                                # Focus on the positive class (Attrition/Leave), usually index 1
                                 dept_shap = shap_vals[1][dept_mask]
                             else:
                                 dept_shap = shap_vals[dept_mask]
                             
-                            # 3. Calculate Mean Absolute SHAP for this subset
+                            # Calculate Mean Absolute Importance
                             mean_shap = np.abs(dept_shap).mean(axis=0)
                             
-                            # 4. Create DataFrame for plotting
-                            dept_importance = pd.DataFrame({
+                            # Create DataFrame
+                            importance_df = pd.DataFrame({
                                 'Feature': X_proc_df.columns,
-                                'Importance': mean_shap
+                                'Impact_Score': mean_shap
                             })
                             
-                            # Remove the department column itself from the chart (it's trivial)
-                            dept_importance = dept_importance[dept_importance['Feature'] != selected_dept_col]
-                            dept_importance.sort_values('Importance', ascending=True, inplace=True)
+                            # Remove the Department column itself (trivial) and other Department cols (irrelevant)
+                            importance_df = importance_df[~importance_df['Feature'].str.contains('Department')]
                             
-                            # 5. Plot
-                            fig = px.bar(dept_importance.tail(10), 
-                                         x='Importance', 
+                            # Sort and get Top 3
+                            importance_df.sort_values('Impact_Score', ascending=False, inplace=True)
+                            top_3_drivers = importance_df.head(3)
+                            
+                            # --- 3. VISUALIZATION (Cleaner Chart) ---
+                            # We reverse it for the bar chart so #1 is at the top
+                            chart_df = importance_df.head(5).iloc[::-1] 
+                            
+                            fig = px.bar(chart_df, 
+                                         x='Impact_Score', 
                                          y='Feature', 
                                          orientation='h',
-                                         title=f"Top Drivers of Attrition: {dept_map[selected_dept_col]}",
+                                         title=f"What is driving attrition in {selected_dept_name}?",
                                          template="plotly_dark",
-                                         color='Importance',
-                                         color_continuous_scale="greens")
+                                         color_discrete_sequence=['#17B794'])
                             
-                            custome_layout(fig, title_size=24)
+                            fig.update_layout(
+                                xaxis_title="Relative Impact (Higher = More Important)",
+                                yaxis_title="",
+                                height=400,
+                                margin=dict(l=0, r=0, t=40, b=0)
+                            )
                             st.plotly_chart(fig, use_container_width=True)
+
+                            # --- 4. ACTIONABLE ADVICE GENERATOR ---
+                            st.markdown("### 💡 Recommended Retention Strategy")
+                            st.write(f"Based on the AI analysis for the <strong>{selected_dept_name}</strong> team:", unsafe_allow_html=True)
                             
-                            # 6. Insights
-                            top_driver = dept_importance.iloc[-1]
-                            st.markdown("---")
-                            st.info(f"""
-                            **Key Insight for {dept_map[selected_dept_col]}:**
-                            The #1 reason employees in this department leave is **{top_driver['Feature']}**.
-                            <br>Unlike the global model, this department is specifically sensitive to this factor.
-                            """)
+                            def get_driver_advice(feature_raw):
+                                # Clean feature name (remove underscores, title case)
+                                feature_clean = feature_raw.replace('_', ' ').title()
+                                
+                                # Map to HR friendly text
+                                if 'Satisfaction' in feature_raw:
+                                    title = "Improve Employee Engagement"
+                                    text = "The AI detects low morale as a primary driver. Initiate 'Stay Interviews', conduct anonymous pulse surveys, and review manager-employee relationships."
+                                    icon = "🗣️"
+                                elif 'Hour' in feature_raw or 'Time' in feature_raw:
+                                    title = "Address Workload & Burnout"
+                                    text = "Overwork is the leading cause. Review project allocation, consider hiring support staff, and enforce 'Right to Disconnect' policies."
+                                    icon = "⏰"
+                                elif 'Project' in feature_raw:
+                                    title = "Optimize Work Distribution"
+                                    text = "Employees are either bored or overwhelmed. Rebalance project assignments to ensure the 'Goldilocks' zone of productivity."
+                                    icon = "📂"
+                                elif 'Evaluation' in feature_raw:
+                                    title = "Clarify Performance Expectations"
+                                    text = "Unclear goals are causing stress. Implement clearer KPIs and more frequent, constructive feedback loops."
+                                    icon = "📊"
+                                elif 'Salary' in feature_raw:
+                                    title = "Review Compensation Competitiveness"
+                                    text = "Pay is a major factor. Conduct a market salary analysis for this specific department and adjust bands if necessary."
+                                    icon = "💰"
+                                elif 'Tenure' in feature_raw or 'Spend' in feature_raw:
+                                    title = "Focus on Career Growth"
+                                    text = "Long-tenured employees feel stagnant. Create clear internal promotion pathways or rotation programs."
+                                    icon = "📈"
+                                else:
+                                    title = f"Monitor {feature_clean}"
+                                    text = f"AI identified {feature_clean} as a key differentiator. Investigate department-specific policies related to this metric."
+                                    icon = "🔍"
+                                    
+                                return icon, title, text
+
+                            # Create Cards for Top 3
+                            c1, c2, c3 = st.columns(3)
+                            cols = [c1, c2, c3]
+                            
+                            for index, col in enumerate(cols):
+                                if index < len(top_3_drivers):
+                                    driver_row = top_3_drivers.iloc[index]
+                                    feature_name = driver_row['Feature']
+                                    impact_score = driver_row['Impact_Score']
+                                    
+                                    icon, title, advice = get_driver_advice(feature_name)
+                                    
+                                    # HTML Card
+                                    card_html = f"""
+                                    <div class="custom-card" style="border-top: 4px solid #17B794;">
+                                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                            <span style="font-size: 1.5rem; margin-right: 10px;">{icon}</span>
+                                            <h4 style="margin: 0; color: #fff;">{title}</h4>
+                                        </div>
+                                        <p style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;">{advice}</p>
+                                        <small style="color: #8b949e;">Driver: {feature_name.replace('_', ' ').title()}</small>
+                                    </div>
+                                    """
+                                    with col:
+                                        st.markdown(card_html, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
