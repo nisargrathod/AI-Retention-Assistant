@@ -32,17 +32,9 @@ from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-# --- Imports for AI Research Lab (Counterfactuals & Fairness) ---
+# --- Imports for AI Research Lab (Counterfactuals) ---
 import dice_ml
 from dice_ml import Dice
-
-# --- Imports for Fairness Audit ---
-try:
-    from fairlearn.metrics import MetricFrame, demographic_parity_difference, equalized_odds_difference
-    FAIRLEARN_AVAILABLE = True
-except ImportError:
-    FAIRLEARN_AVAILABLE = False
-# ====================================================================
 
 # ====================================================================
 # 1. ADVANCED UI STYLING (CSS)
@@ -976,25 +968,22 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (FIXED: METRICFRAME TYPEERROR)
+    # Page: AI Research Lab (UPDATED: Segmented Explainability)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
-        st.markdown("<p style='color: #9ca3af;'>Experimental modules for Model Explainability, Fairness, and Benchmarking.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af;'>Experimental modules for Model Explainability, Benchmarking, and Deep Learning.</p>", unsafe_allow_html=True)
         
-        tab1, tab2 = st.tabs(["📊 Model Benchmarking", "⚖️ Fairness Audit"])
+        tab1, tab2 = st.tabs(["📊 Model Benchmarking", "🔬 Segmented Explainability"])
         
-        # --- TAB 1: MODEL BENCHMARKING (Fully Implemented) ---
+        # --- TAB 1: MODEL BENCHMARKING ---
         with tab1:
             st.subheader("Algorithm Performance Comparison")
             st.write("Comparing **LightGBM** (Our Choice) against **Random Forest** and **Logistic Regression**.")
             
-            # Import metrics locally to ensure availability
-            from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-            
             if st.button("Run Benchmark", type="primary", key="run_benchmark"):
                 with st.spinner("Training competing models..."):
-                    # 1. LightGBM (Already trained, but we need preds on test set)
+                    # 1. LightGBM
                     y_pred_lgbm = pipeline.predict(X_test_cur)
                     proba_lgbm = pipeline.predict_proba(X_test_cur)[:, 1]
                     
@@ -1052,7 +1041,6 @@ def main():
                     st.markdown("### 📈 Performance Metrics")
                     st.dataframe(results_df.style.highlight_max(axis=0, color='#17B794'), use_container_width=True)
                     
-                    # Bar Chart Comparison
                     fig_metrics = px.bar(results_df.melt(id_vars='Model', var_name='Metric', value_name='Score'),
                                          x='Metric', y='Score', color='Model', barmode='group',
                                          title="Model Comparison", template="plotly_dark",
@@ -1060,109 +1048,81 @@ def main():
                     custome_layout(fig_metrics, title_size=24)
                     st.plotly_chart(fig_metrics, use_container_width=True)
                     
-                    st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall, minimizing both False Positives and False Negatives.")
+                    st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall.")
 
-        # --- TAB 2: REAL FAIRNESS AUDIT (FIXED: SERIES ALIGNMENT) ---
+        # --- TAB 2: SEGMENTED EXPLAINABILITY (NEW FEATURE) ---
         with tab2:
-            st.subheader("⚖️ Algorithmic Fairness Audit")
+            st.subheader("🔬 Deep Dive: Why do specific departments leave?")
+            st.markdown("""
+            <p style='color: #9ca3af; margin-bottom: 20px;'>
+            Global importance tells you what matters overall. This tool tells you <strong>what matters specifically for each department</strong>.
+            <br>Example: Does 'Salary' drive attrition in Sales, while 'Hours' drives it in Tech?
+            </p>
+            """, unsafe_allow_html=True)
             
-            if not FAIRLEARN_AVAILABLE:
-                st.error("❌ Library Missing")
-                st.markdown("""
-                The `fairlearn` library is required to run real-time bias audits.
-                
-                **To fix this:**
-                1. Open your `requirements.txt` file.
-                2. Add this line: `fairlearn`
-                3. Push to GitHub and redeploy.
-                
-                Alternatively, run in your terminal:
-                `pip install fairlearn`
-                """)
+            # Get SHAP data (Cached)
+            shap_vals, X_proc_df = get_shap_explanations(pipeline, df)
+            
+            # Identify Department columns in the processed dataframe
+            dept_cols = [col for col in X_proc_df.columns if 'Department' in col]
+            
+            if not dept_cols:
+                st.error("No Department columns found in processed data.")
             else:
-                st.success("✅ System Ready. `fairlearn` detected.")
-                st.write("Analyze if the AI predictions are biased against specific groups (e.g., Departments, Salary Levels).")
+                # Map clean names back to readable format for selection
+                dept_map = {col: col.replace('Department ', '') for col in dept_cols}
+                selected_dept_col = st.selectbox("Select Department to Analyze", options=list(dept_map.keys()), format_func=lambda x: dept_map[x])
                 
-                sensitive_feature = st.selectbox("Select Sensitive Feature", ['salary', 'Department'])
-                
-                if st.button("🚀 Run Fairness Audit", type="primary"):
-                    with st.spinner("Calculating bias metrics..."):
-                        # 1. Get Predictions
-                        y_pred_raw = pipeline.predict(X_test_cur)
+                if st.button("Analyze Department Drivers", type="primary"):
+                    with st.spinner("Computing localized feature importance..."):
+                        # 1. Identify rows belonging to this department (Value == 1)
+                        dept_mask = X_proc_df[selected_dept_col] == 1
                         
-                        # ====================================================================
-                        # FIX: Convert to Pandas Series with matching indices (0..N)
-                        # This resolves the TypeError caused by mixed list/array inputs 
-                        # or index mismatches in MetricFrame's internal DataFrame construction.
-                        # ====================================================================
-                        
-                        # y_test is already a Series from train_test_split, but ensure index is reset
-                        y_true_aligned = y_test.reset_index(drop=True)
-                        
-                        # y_pred_raw is a numpy array. Convert to Series and reset index.
-                        y_pred_aligned = pd.Series(y_pred_raw, name='predicted_left').reset_index(drop=True)
-                        
-                        # sensitive_features is a DataFrame slice. Reset index to match y_true.
-                        sensitive_aligned = X_test_cur[sensitive_feature].reset_index(drop=True)
-                        
-                        # 2. Run MetricFrame using aligned Series
-                        # Note: MetricFrame requires y_true, y_pred, and sensitive_features to be index-aligned.
-                        metric_frame = MetricFrame(y_true=y_true_aligned,
-                                                     y_pred=y_pred_aligned,
-                                                     sensitive_features=sensitive_aligned)
-                        
-                        # --- 1. SELECTION RATE (Demographic Parity) ---
-                        st.markdown("#### 📊 Demographic Parity (Selection Rate)")
-                        st.write("The percentage of employees predicted to 'Leave' within each group.")
-                        
-                        fig, ax = plt.subplots(figsize=(10, 5))
-                        metric_frame.by_group.plot.bar(y="selection_rate", ax=ax, legend=False, color='#17B794')
-                        ax.set_title(f"Selection Rate by {sensitive_feature.title()}", color='white')
-                        ax.set_xlabel(sensitive_feature.title(), color='white')
-                        ax.tick_params(axis='x', colors='white')
-                        ax.tick_params(axis='y', colors='white')
-                        ax.spines['bottom'].set_color('white')
-                        ax.spines['left'].set_color('white')
-                        st.pyplot(fig)
-                        
-                        # Display Difference Metric
-                        diff_dp = metric_frame.demographic_parity_difference()
-                        st.metric("Demographic Parity Difference", f"{diff_dp:.3f}", 
-                                 delta="Difference between max and min selection rate")
-                        
-                        st.markdown("---")
-                        
-                        # --- 2. EQUALIZED ODDS (True Positive Rate) ---
-                        st.markdown("#### 🎯 Equalized Odds (True Positive Rate)")
-                        st.write("The percentage of actual 'Leavers' correctly identified by the AI within each group.")
-                        
-                        fig2, ax2 = plt.subplots(figsize=(10, 5))
-                        metric_frame.by_group.plot.bar(y="true_positive_rate", ax=ax2, legend=False, color='#EEB76B')
-                        ax2.set_title(f"True Positive Rate by {sensitive_feature.title()}", color='white')
-                        ax2.set_xlabel(sensitive_feature.title(), color='white')
-                        ax2.tick_params(axis='x', colors='white')
-                        ax2.tick_params(axis='y', colors='white')
-                        ax2.spines['bottom'].set_color('white')
-                        ax2.spines['left'].set_color('white')
-                        st.pyplot(fig2)
-
-                        # Display Difference Metric
-                        diff_eo = metric_frame.equalized_odds_difference()
-                        st.metric("Equalized Odds Difference", f"{diff_eo:.3f}",
-                                 delta="Difference in accuracy across groups")
-
-                        # --- INTERPRETATION ---
-                        st.markdown("---")
-                        st.markdown("### 💡 Interpretation")
-                        st.info(f"""
-                        **Demographic Parity Difference ({diff_dp:.3f}):**
-                        - Ideally, this should be close to **0.00**.
-                        - A high positive number means the AI is biased toward predicting 'Leave' for one specific group more than others.
-                        
-                        **Equalized Odds Difference ({diff_eo:.3f}):**
-                        - Ideally, this should be close to **0.00**.
-                        - If high, the AI is significantly better at catching leavers in one group compared to another.
-                        """)
+                        if dept_mask.sum() == 0:
+                            st.warning(f"No data found for {dept_map[selected_dept_col]} in the training set.")
+                        else:
+                            # 2. Filter SHAP values for these rows
+                            # Handle binary classification SHAP output (list of 2 arrays)
+                            if isinstance(shap_vals, list):
+                                # Focus on the positive class (Attrition/Leave), usually index 1
+                                dept_shap = shap_vals[1][dept_mask]
+                            else:
+                                dept_shap = shap_vals[dept_mask]
+                            
+                            # 3. Calculate Mean Absolute SHAP for this subset
+                            mean_shap = np.abs(dept_shap).mean(axis=0)
+                            
+                            # 4. Create DataFrame for plotting
+                            dept_importance = pd.DataFrame({
+                                'Feature': X_proc_df.columns,
+                                'Importance': mean_shap
+                            })
+                            
+                            # Remove the department column itself from the chart (it's trivial)
+                            dept_importance = dept_importance[dept_importance['Feature'] != selected_dept_col]
+                            dept_importance.sort_values('Importance', ascending=True, inplace=True)
+                            
+                            # 5. Plot
+                            fig = px.bar(dept_importance.tail(10), 
+                                         x='Importance', 
+                                         y='Feature', 
+                                         orientation='h',
+                                         title=f"Top Drivers of Attrition: {dept_map[selected_dept_col]}",
+                                         template="plotly_dark",
+                                         color='Importance',
+                                         color_continuous_scale="greens")
+                            
+                            custome_layout(fig, title_size=24)
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # 6. Insights
+                            top_driver = dept_importance.iloc[-1]
+                            st.markdown("---")
+                            st.info(f"""
+                            **Key Insight for {dept_map[selected_dept_col]}:**
+                            The #1 reason employees in this department leave is **{top_driver['Feature']}**.
+                            <br>Unlike the global model, this department is specifically sensitive to this factor.
+                            """)
 
 if __name__ == "__main__":
     main()
