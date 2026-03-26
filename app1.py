@@ -968,7 +968,7 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (UPDATED: HR FRIENDLY SEGMENTED EXPLAINABILITY)
+    # Page: AI Research Lab (FIXED: CASE SENSITIVE COLUMN LOOKUP)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
@@ -1050,7 +1050,7 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall.")
 
-        # --- TAB 2: SEGMENTED EXPLAINABILITY (HR FRIENDLY VERSION) ---
+        # --- TAB 2: SEGMENTED EXPLAINABILITY (FIXED LOOKUP) ---
         with tab2:
             st.subheader("🔬 Departmental Strategy Deep Dive")
             st.markdown("""
@@ -1086,10 +1086,16 @@ def main():
                     # --- 2. GET AI INSIGHTS (SHAP) ---
                     shap_vals, X_proc_df = get_shap_explanations(pipeline, df)
                     
-                    # Identify the one-hot encoded column for this department
-                    target_col = f"Department {selected_dept_name}"
+                    # --- FIX: Dynamic Case-Insensitive Column Search ---
+                    # The cached function formats names (e.g. "IT" -> "It"). 
+                    # We search for the column dynamically to handle case mismatches.
+                    target_col = None
+                    for col in X_proc_df.columns:
+                        if 'Department' in col and selected_dept_name.lower() in col.lower():
+                            target_col = col
+                            break
                     
-                    if target_col not in X_proc_df.columns:
+                    if not target_col:
                         st.error(f"Could not find data for {selected_dept_name} in the model features.")
                     else:
                         # Filter data for this department
@@ -1200,7 +1206,7 @@ def main():
                                             <h4 style="margin: 0; color: #fff;">{title}</h4>
                                         </div>
                                         <p style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;">{advice}</p>
-                                        <small style="color: #8b949e;">Driver: {feature_name.replace('_', ' ').title()}</small>
+                                        <small style="color: #8b949e;'>Driver: {feature_name.replace('_', ' ').title()}</small>
                                     </div>
                                     """
                                     with col:
