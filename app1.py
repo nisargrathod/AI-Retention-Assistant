@@ -36,7 +36,7 @@ from langchain_core.output_parsers import StrOutputParser
 import dice_ml
 from dice_ml import Dice
 
-# --- Imports for Fairness Audit (NEW) ---
+# --- Imports for Fairness Audit ---
 try:
     from fairlearn.metrics import MetricFrame, demographic_parity_difference, equalized_odds_difference
     FAIRLEARN_AVAILABLE = True
@@ -271,7 +271,6 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
                 cols_index.append(i)
 
     if len(cols_index) > 0:
-        # FIX: Corrected list comprehension syntax
         tabs = st.tabs([num_columns[i].title().replace("_", " ") for i in cols_index])
         for i in range(len(cols_index)):
             tabs[i].plotly_chart(figs[i], use_container_width=True)
@@ -990,7 +989,10 @@ def main():
             st.subheader("Algorithm Performance Comparison")
             st.write("Comparing **LightGBM** (Our Choice) against **Random Forest** and **Logistic Regression**.")
             
-            if st.button("Run Benchmark", type="primary"):
+            # Import metrics locally to ensure availability
+            from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+            
+            if st.button("Run Benchmark", type="primary", key="run_benchmark"):
                 with st.spinner("Training competing models..."):
                     # 1. LightGBM (Already trained, but we need preds on test set)
                     y_pred_lgbm = pipeline.predict(X_test_cur)
@@ -1085,6 +1087,7 @@ def main():
                 
                 if st.button("🚀 Run Fairness Audit", type="primary"):
                     with st.spinner("Calculating bias metrics..."):
+                        # 1. Get Predictions
                         y_pred_raw = pipeline.predict(X_test_cur)
                         
                         # ====================================================================
@@ -1092,11 +1095,18 @@ def main():
                         # This resolves the TypeError caused by mixed list/array inputs 
                         # or index mismatches in MetricFrame's internal DataFrame construction.
                         # ====================================================================
+                        
+                        # y_test is already a Series from train_test_split, but ensure index is reset
                         y_true_aligned = y_test.reset_index(drop=True)
+                        
+                        # y_pred_raw is a numpy array. Convert to Series and reset index.
                         y_pred_aligned = pd.Series(y_pred_raw, name='predicted_left').reset_index(drop=True)
+                        
+                        # sensitive_features is a DataFrame slice. Reset index to match y_true.
                         sensitive_aligned = X_test_cur[sensitive_feature].reset_index(drop=True)
                         
-                        # Run MetricFrame using aligned Series
+                        # 2. Run MetricFrame using aligned Series
+                        # Note: MetricFrame requires y_true, y_pred, and sensitive_features to be index-aligned.
                         metric_frame = MetricFrame(y_true=y_true_aligned,
                                                      y_pred=y_pred_aligned,
                                                      sensitive_features=sensitive_aligned)
