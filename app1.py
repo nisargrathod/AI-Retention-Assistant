@@ -968,13 +968,13 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (FIXED: CASE SENSITIVE COLUMN LOOKUP)
+    # Page: AI Research Lab (UPDATED: 3 TABS ONLY)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
-        st.markdown("<p style='color: #9ca3af;'>Experimental modules for Model Explainability, Benchmarking, and Deep Learning.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af;'>Experimental modules for Model Explainability and Anomaly Detection.</p>", unsafe_allow_html=True)
         
-        tab1, tab2 = st.tabs(["📊 Model Benchmarking", "🔬 Departmental Strategy Deep Dive"])
+        tab1, tab2, tab3 = st.tabs(["📊 Model Benchmarking", "🔬 Departmental Strategy Deep Dive", "🕵️ Anomaly Detection"])
         
         # --- TAB 1: MODEL BENCHMARKING ---
         with tab1:
@@ -1050,7 +1050,7 @@ def main():
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall.")
 
-        # --- TAB 2: SEGMENTED EXPLAINABILITY (FIXED LOOKUP) ---
+        # --- TAB 2: DEPARTMENTAL STRATEGY ---
         with tab2:
             st.subheader("🔬 Departmental Strategy Deep Dive")
             st.markdown("""
@@ -1087,8 +1087,6 @@ def main():
                     shap_vals, X_proc_df = get_shap_explanations(pipeline, df)
                     
                     # --- FIX: Dynamic Case-Insensitive Column Search ---
-                    # The cached function formats names (e.g. "IT" -> "It"). 
-                    # We search for the column dynamically to handle case mismatches.
                     target_col = None
                     for col in X_proc_df.columns:
                         if 'Department' in col and selected_dept_name.lower() in col.lower():
@@ -1211,6 +1209,129 @@ def main():
                                     """
                                     with col:
                                         st.markdown(card_html, unsafe_allow_html=True)
+
+        # --- TAB 3: ANOMALY DETECTION ---
+        with tab3:
+            st.subheader("🕵️ Anomaly Detection")
+            st.markdown("""
+            <p style='color: #9ca3af; margin-bottom: 20px;'>
+            Discover the people who defy the AI's logic.
+            <br><br>
+            <strong>🚪 Happy Leavers:</strong> Employees the AI predicted would STAY, but LEFT.
+            <br>
+            <strong>🛡️ Loyal Sufferers:</strong> Employees the AI predicted would LEAVE, but STAYED.
+            </p>
+            """, unsafe_allow_html=True)
+            
+            # 1. Get Predictions for the whole dataset
+            X_all = df.drop('left', axis=1)
+            y_true = df['left']
+            
+            # Get class predictions (0 or 1)
+            y_pred = pipeline.predict(X_all)
+            
+            # 2. Identify Anomalies
+            # False Negatives: Predicted 0 (Stay), Actual 1 (Left) -> Happy Leavers
+            happy_leavers_indices = np.where((y_pred == 0) & (y_true == 1))[0]
+            df_happy_leavers = df.iloc[happy_leavers_indices]
+            
+            # False Positives: Predicted 1 (Leave), Actual 0 (Stay) -> Loyal Sufferers
+            loyal_sufferers_indices = np.where((y_pred == 1) & (y_true == 0))[0]
+            df_loyal_sufferers = df.iloc[loyal_sufferers_indices]
+            
+            # 3. Calculate Stats for Comparison
+            def get_profile_stats(df_group):
+                if len(df_group) == 0:
+                    return None
+                stats = {
+                    'Satisfaction': df_group['satisfaction_level'].mean(),
+                    'Last Evaluation': df_group['last_evaluation'].mean(),
+                    'Avg Monthly Hours': df_group['average_montly_hours'].mean(),
+                    'Projects': df_group['number_project'].mean(),
+                    'Tenure': df_group['time_spend_company'].mean()
+                }
+                return pd.Series(stats)
+
+            stats_happy = get_profile_stats(df_happy_leavers)
+            stats_loyal = get_profile_stats(df_loyal_sufferers)
+            stats_avg = get_profile_stats(df) # Company Average
+
+            # Create comparison DataFrame
+            comparison_df = pd.DataFrame({
+                'Company Average': stats_avg,
+                'Happy Leavers': stats_happy,
+                'Loyal Sufferers': stats_loyal
+            }).T
+
+            # 4. Display Analysis
+            col_a, col_b = st.columns(2)
+            
+            with col_a:
+                st.markdown("### 🚪 The Happy Leavers")
+                st.caption(f"Count: {len(df_happy_leavers)} employees")
+                
+                if len(df_happy_leavers) > 0:
+                    st.info("""
+                    **Insight:** These people had good stats but left anyway.
+                    **Action:** Review these specific profiles. Was it poaching? Spouse relocation? 
+                    The AI couldn't predict it because it wasn't in the data.
+                    """)
+                    # Show a sample
+                    st.dataframe(df_happy_leavers[['satisfaction_level', 'last_evaluation', 'Department', 'salary']].head(), use_container_width=True)
+                else:
+                    st.success("✅ No anomalies found. The model predicted all leavers correctly.")
+
+            with col_b:
+                st.markdown("### 🛡️ The Loyal Sufferers")
+                st.caption(f"Count: {len(df_loyal_sufferers)} employees")
+                
+                if len(df_loyal_sufferers) > 0:
+                    st.warning("""
+                    **Insight:** These people have high-risk profiles but haven't left yet.
+                    **Action:** Why are they staying? Are they 'golden handcuffed' by benefits? 
+                    Or do they lack options? They are high risk if the job market opens up.
+                    """)
+                    # Show a sample
+                    st.dataframe(df_loyal_sufferers[['satisfaction_level', 'last_evaluation', 'Department', 'salary']].head(), use_container_width=True)
+                else:
+                    st.success("✅ No anomalies found.")
+
+            # 5. Comparative Visualization (Radar Chart)
+            if stats_happy is not None or stats_loyal is not None:
+                st.markdown("---")
+                st.subheader("📊 Anomaly Profile Comparison")
+                
+                # Normalize data for Radar Chart (0-1 scale) to make comparison fair
+                # We use the max of the 'Company Average' as the baseline
+                max_vals = stats_avg.abs().max()
+                norm_df = comparison_df.div(max_vals)
+                
+                # Reset index for plotting
+                norm_df = norm_df.reset_index().melt(id_vars='index', var_name='Metric', value_name='Value')
+                norm_df.rename(columns={'index': 'Group'}, inplace=True)
+                
+                fig = px.line_polar(norm_df, r='Value', theta='Metric', color='Group', 
+                                     line_close=True,
+                                     template="plotly_dark",
+                                     color_discrete_map={
+                                         'Company Average': '#9ca3af',
+                                         'Happy Leavers': '#EEB76B',  # Yellow/Orange for "Unexpected"
+                                         'Loyal Sufferers': '#FF4B4B' # Red for "Danger"
+                                     })
+                
+                fig.update_layout(
+                    polar=dict(
+                        radialaxis=dict(visible=True, range=[0, 1.2])
+                    )
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.markdown("""
+                <small style='color: #8b949e;'>
+                *Note: Values are normalized relative to the company average. 
+                A spike in 'Satisfaction' for Happy Leavers confirms they were generally happy before leaving.*
+                </small>
+                """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
