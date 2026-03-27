@@ -191,7 +191,7 @@ def bar_plot(the_df, column, orientation="v", top_10=False):
                  y=dep.values,
                  orientation=orientation,
                  color=dep.index.astype(str),
-                 title=f'Observations Distribution Via {column.title().replace("_", " ")}',
+                 title=f'Observations Distribution Via {column.title().replace("_', " ")}',
                  color_discrete_sequence=["#17B794"],
                  labels={"x": column.title().replace("_", " "),
                          "y": "Count of Employees"},
@@ -206,7 +206,7 @@ def pie_chart(the_df, column):
     fig = px.pie(data_frame=counts,
                  names=counts.index,
                  values=counts.values,
-                 title=f'Popularity of {column.title().replace("_", " ")}',
+                 title=f'Popularity of {column.title().replace("_', " ")}',
                  color_discrete_sequence=["#17B794", "#EEB76B", "#9C3D54"],
                  template="plotly_dark",
                  height=650
@@ -548,9 +548,10 @@ def main():
                 'Why They Leave',    
                 'Budget Planner',
                 'AI Assistant',
-                'AI Research Lab'  
+                'AI Research Lab',
+                'Strategic Roadmap'  # NEW MENU ITEM
             ],  
-            icons=['house', 'bar-chart-line-fill', "graph-up-arrow", 'helpful-tip-fill', 'currency-rupee', 'robot', 'cpu'], 
+            icons=['house', 'bar-chart-line-fill', "graph-up-arrow", 'helpful-tip-fill', 'currency-rupee', 'robot', 'cpu', 'flag-2-fill'], 
             menu_icon="cast", default_index=0, 
             styles={
                 "container": {"padding": "0!important", "background-color": 'transparent'},
@@ -968,7 +969,7 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (UPDATED: 5 TABS WITH REDESIGNED TAB 5)
+    # Page: AI Research Lab
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
@@ -1580,6 +1581,181 @@ def main():
                         st.error(f"**{item['Type']}**: {item['Rule']}")
                     else:
                         st.warning(f"**{item['Type']}**: {item['Rule']}")
+
+    # ====================================================================
+    # Page: STRATEGIC ROADMAP & FUTURE FORECAST (NEW)
+    # ====================================================================
+    if page == "Strategic Roadmap":
+        st.header("🚀 Strategic Roadmap & Future Forecast")
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>From Diagnosis to Execution. Plan for the next 6 months and project the future of your workforce.</p>", unsafe_allow_html=True)
+        
+        # --- PART 1: THE ROADMAP (LLM GENERATED) ---
+        st.markdown("### 🗓️ 6-Month Execution Roadmap")
+        st.write("Let AI draft your implementation timeline based on the company's biggest risk factors.")
+        
+        # Get Top Drivers dynamically
+        avg_sat = df['satisfaction_level'].mean()
+        avg_hours = df['average_montly_hours'].mean()
+        avg_projects = df['number_project'].mean()
+        
+        issues = []
+        if avg_sat < 0.6: issues.append("Low Employee Satisfaction")
+        if avg_hours > 200: issues.append("Excessive Workload (Burnout)")
+        if avg_projects > 4: issues.append("Project Imbalance")
+        if len(issues) == 0: issues.append("General Retention Strategy")
+        
+        issues_str = ", ".join(issues)
+        
+        if st.button("Generate Action Roadmap", type="primary"):
+            with st.spinner("Drafting your 6-month strategy..."):
+                try:
+                    api_key = st.secrets.get("GROQ_API_KEY", None)
+                    if api_key:
+                        llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.5)
+                        
+                        template = """
+                        You are an expert HR Strategist and Project Manager.
+                        
+                        **Company Context:**
+                        Our AI has identified the following critical attrition drivers: {issues}.
+                        We need to stabilize the workforce over the next 6 months.
+                        
+                        **Task:**
+                        Create a 6-month execution roadmap. Break it down into phases (e.g., Diagnosis, Pilot, Rollout, Review).
+                        For each month, provide:
+                        1. **Phase Name**
+                        2. **Specific Actionable Steps** (2-3 bullet points)
+                        3. **Success Metrics** (How do we know it worked?)
+                        
+                        **Format:** Use clean Markdown formatting. Be concise and professional.
+                        """
+                        
+                        prompt = PromptTemplate.from_template(template)
+                        chain = prompt | llm | StrOutputParser()
+                        
+                        response = chain.invoke({"issues": issues_str})
+                        
+                        st.markdown(f"<div class='llm-response'>{response}</div>", unsafe_allow_html=True)
+                    else:
+                        st.warning("🔑 API Key missing for Roadmap generation. Showing generic template.")
+                        generic_plan = """
+                        **Month 1: Diagnosis & Audit**
+                        *   Conduct stay interviews with top 10% at-risk employees.
+                        *   Audit current workload distribution across departments.
+                        *   *Metric:* Complete 100% of risk interviews.
+                        
+                        **Month 2: Strategy Design**
+                        *   Based on audit, design specific interventions (e.g., flexible hours).
+                        *   Set clear KPIs for the pilot program.
+                        *   *Metric:* Pilot program approval from leadership.
+                        
+                        **Month 3: Pilot Launch**
+                        *   Launch intervention in one high-risk department (e.g., Sales or IT).
+                        *   Monitor feedback daily.
+                        *   *Metric:* Pilot participation rate > 80%.
+                        
+                        **Month 4: Analysis & Adjustment**
+                        *   Review pilot data. Adjust policies based on feedback.
+                        *   Prepare training materials for company-wide rollout.
+                        *   *Metric:* Revised policy documentation.
+                        
+                        **Month 5: Company Rollout**
+                        *   Launch the initiative across all departments.
+                        *   Manager training sessions.
+                        *   *Metric:* 100% department coverage.
+                        
+                        **Month 6: Review & Stabilization**
+                        *   Measure impact on satisfaction and hours.
+                        *   Celebrate wins and recognize improvements.
+                        *   *Metric:* 5% reduction in projected attrition.
+                        """
+                        st.markdown(generic_plan)
+                except Exception as e:
+                    st.error(f"Error generating roadmap: {e}")
+
+        st.markdown("---")
+        
+        # --- PART 2: THE FUTURE FORECAST (MATHEMATICAL) ---
+        st.markdown("### 📈 12-Month Workforce Forecast")
+        st.write("Visualize the long-term impact of your intervention. Compare 'Business as Usual' vs. 'With Intervention'.")
+        
+        # Controls for Simulation
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            intervention_efficacy = st.slider("Expected Intervention Success Rate (%)", 0, 50, 20, 5, 
+                                          help="What % of high-risk employees do you expect to save with your roadmap?")
+        
+        with col_f2:
+            natural_attrition_rate = st.slider("Natural Monthly Attrition Rate (%)", 0.5, 5.0, 1.5, 0.1,
+                                          help="The baseline % of employees expected to leave even with low risk.")
+
+        if st.button("Run Forecast Simulation", type="secondary"):
+            # Simulation Logic
+            months = list(range(1, 13))
+            current_workforce = len(df)
+            
+            # Calculate current monthly hazard rate based on model predictions
+            # We approximate: Annual Risk Probability / 12
+            current_risk_prob = pipeline.predict_proba(df.drop('left', axis=1))[:, 1].mean()
+            monthly_hazard_current = current_risk_prob / 12
+            
+            # Scenario 1: Business as Usual (No improvement)
+            forecast_bau = []
+            temp_workforce_bau = current_workforce
+            
+            # Scenario 2: With Intervention (Reduced Hazard)
+            # We assume the intervention reduces the hazard rate by the efficacy percentage
+            monthly_hazard_intervention = monthly_hazard_current * (1 - (intervention_efficacy / 100))
+            forecast_intervention = []
+            temp_workforce_int = current_workforce
+            
+            for m in months:
+                # Calculate leavers this month
+                leavers_bau = temp_workforce_bau * monthly_hazard_current
+                leavers_int = temp_workforce_int * monthly_hazard_intervention
+                
+                # Update workforce (Assume no hiring for this simple projection)
+                temp_workforce_bau -= leavers_bau
+                temp_workforce_int -= leavers_int
+                
+                # Add natural attrition (people leaving for reasons AI can't predict)
+                # Apply a small constant decay for natural reasons
+                temp_workforce_bau *= (1 - (natural_attrition_rate/100))
+                temp_workforce_int *= (1 - (natural_attrition_rate/100))
+                
+                forecast_bau.append(temp_workforce_bau)
+                forecast_intervention.append(temp_workforce_int)
+            
+            # Visualization
+            forecast_df = pd.DataFrame({
+                'Month': months,
+                'Business as Usual (Do Nothing)': forecast_bau,
+                'With Intervention (Roadmap)': forecast_intervention
+            }).melt(id_vars='Month', var_name='Scenario', value_name='Workforce Count')
+            
+            fig_forecast = px.line(forecast_df, 
+                                   x='Month', 
+                                   y='Workforce Count', 
+                                   color='Scenario',
+                                   title="Projected Workforce Size (12 Months)",
+                                   template="plotly_dark",
+                                   markers=True,
+                                   color_discrete_map={
+                                       'Business as Usual (Do Nothing)': '#FF4B4B', # Red line dropping
+                                       'With Intervention (Roadmap)': '#17B794'   # Green line stabilizing
+                                   })
+            
+            fig_forecast.update_layout(yaxis_title="Employee Headcount", xaxis=dict(dtick=1))
+            st.plotly_chart(fig_forecast, use_container_width=True)
+            
+            # Insight Calculation
+            saved_employees = forecast_intervention[-1] - forecast_bau[-1]
+            st.success(f"""
+            **Impact Projection:**
+            By executing your roadmap with an estimated {intervention_efficacy}% success rate, 
+            you are projected to save approximately <strong>{int(saved_employees)} employees</strong> over the next year 
+            compared to doing nothing.
+            """)
 
 if __name__ == "__main__":
     main()
