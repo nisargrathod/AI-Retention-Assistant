@@ -968,7 +968,7 @@ def main():
                 st.error(f"Error generating report: {e}")
 
     # ====================================================================
-    # Page: AI Research Lab (UPDATED: 5 TABS)
+    # Page: AI Research Lab (UPDATED: 5 TABS WITH REDESIGNED TAB 5)
     # ====================================================================
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
@@ -1426,17 +1426,17 @@ def main():
             col_z2.metric("Potential Efficiency Savings", outplace_count, delta="Safe to Exit", delta_color="normal")
             col_z3.metric("Average Replacement Cost", f"₹{int(cost_threshold):,}")
 
-        # --- TAB 5: THE 'IDEAL CANDIDATE' PROFILER ---
+        # --- TAB 5: THE 'IDEAL CANDIDATE' PROFILER (REDESIGNED) ---
         with tab5:
             st.subheader("🎯 The 'Ideal Candidate' Profiler")
             st.markdown("""
             <p style='color: #9ca3af; margin-bottom: 20px;'>
             Shift from Retention to <strong>Acquisition</strong>. 
-            <br>We analyze your "Superstars" (Loyal + High Performers) to define the perfect profile for your next job opening.
+            <br>We analyze your "Superstars" (Loyal + High Performers) to build a clear hiring checklist.
             </p>
             """, unsafe_allow_html=True)
             
-            # 1. Define the "Superstar" Criteria (Loyal + High Performance)
+            # 1. Define the "Superstar" Criteria
             # Loyal: Time Spent > 4 Years AND Still with company (left=0)
             # High Performer: Last Evaluation > 0.8
             superstar_mask = (df['left'] == 0) & (df['time_spend_company'] > 4) & (df['last_evaluation'] > 0.8)
@@ -1450,84 +1450,136 @@ def main():
             else:
                 st.success(f"Analyzed {len(df_superstars)} Superstars vs {len(df_average)} Average Employees.")
                 
-                # 2. Calculate Key Metrics for both groups
+                # 2. Calculate Key Metrics
                 metrics_to_compare = ['satisfaction_level', 'last_evaluation', 'number_project', 'average_montly_hours', 'time_spend_company']
                 
                 super_mean = df_superstars[metrics_to_compare].mean()
                 avg_mean = df_average[metrics_to_compare].mean()
                 
-                # Calculate the "Difference" (Superstar - Average)
-                diff_mean = super_mean - avg_mean
-                
-                # Create Comparison DataFrame
-                profile_df = pd.DataFrame({
+                # --- NEW VISUALIZATION 1: GROUPED BAR CHART (Easier to read than Radar) ---
+                # Create a long format dataframe for Plotly Grouped Bar
+                comparison_long = pd.DataFrame({
                     'Metric': metrics_to_compare,
-                    'Superstar (Loyal & High Perf)': super_mean.values,
-                    'Average Employee': avg_mean.values,
-                    'Difference': diff_mean.values
+                    'Superstar': super_mean.values,
+                    'Average Employee': avg_mean.values
+                }).melt(id_vars='Metric', var_name='Group', value_name='Average Value')
+                
+                fig_compare = px.bar(
+                    comparison_long,
+                    x='Metric',
+                    y='Average Value',
+                    color='Group',
+                    barmode='group',  # This puts bars side-by-side
+                    title="Superstars vs. Average Employees (Head-to-Head)",
+                    template="plotly_dark",
+                    color_discrete_map={
+                        'Superstar': '#17B794',  # Green
+                        'Average Employee': '#9ca3af' # Grey
+                    },
+                    text_auto=True,
+                    height=500
+                )
+                
+                # Clean up axis labels
+                fig_compare.update_xaxes(title="", tickangle=45)
+                fig_compare.update_layout(yaxis_title="Average Score / Value")
+                st.plotly_chart(fig_compare, use_container_width=True)
+                
+                # --- NEW VISUALIZATION 2: THE DNA OF A TOP PERFORMER (Summary Cards) ---
+                st.markdown("### 🧬 The DNA of a Top Performer")
+                st.write("Here are the 3 biggest differentiators between your best employees and the rest.")
+                
+                # Calculate Difference to find the top differentiators
+                diff_df = pd.DataFrame({
+                    'Metric': metrics_to_compare,
+                    'Difference': (super_mean - avg_mean).values
                 })
                 
-                # 3. Visualization 1: The "Superstar" Radar Chart
-                # Normalize data to 0-1 for Radar Chart
-                max_vals = df[metrics_to_compare].max()
+                # Get top 3 differentiators (absolute difference)
+                diff_df['Abs_Diff'] = diff_df['Difference'].abs()
+                top_3_diff = diff_df.nlargest(3, 'Abs_Diff')
                 
-                norm_super = (super_mean / max_vals).values
-                norm_avg = (avg_mean / max_vals).values
+                col_dna1, col_dna2, col_dna3 = st.columns(3)
                 
-                radar_df = pd.DataFrame({
-                    'Metric': metrics_to_compare,
-                    'Superstar Profile': norm_super,
-                    'Average Profile': norm_avg
-                }).melt(id_vars='Metric', var_name='Group', value_name='Normalized Value')
-                
-                fig_radar = px.line_polar(radar_df, r='Normalized Value', theta='Metric', color='Group',
-                                            line_close=True,
-                                            template="plotly_dark",
-                                            color_discrete_map={
-                                                'Superstar Profile': '#17B794', 
-                                                'Average Profile': '#9ca3af'   
-                                            })
-                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1.1])))
-                
-                st.plotly_chart(fig_radar, use_container_width=True)
-                
-                # 4. Visualization 2: The Hiring Gap (Bar Chart)
-                gap_df = profile_df.sort_values('Difference', ascending=False)
-                
-                fig_gap = px.bar(gap_df, x='Metric', y='Difference',
-                                 title="Trait Gap (Superstar - Average)",
-                                 template="plotly_dark",
-                                 color='Difference',
-                                 color_continuous_scale='RdYlGn') 
-                
-                fig_gap.update_layout(yaxis_title="Difference (Higher is better for Superstars)")
-                st.plotly_chart(fig_gap, use_container_width=True)
-                
-                # 5. Automated Job Description Insights
+                def get_dna_insight(metric, diff_val):
+                    metric_name = metric.replace('_', ' ').title()
+                    if metric == 'satisfaction_level':
+                        if diff_val > 0:
+                            return "🟢 High Culture Fit", f"Superstars are {diff_val:.2f} points happier on average."
+                        else:
+                            return "🔴 Low Satisfaction", f"Unexpected: Superstars seem less satisfied."
+                    elif metric == 'average_montly_hours':
+                        if diff_val < 0:
+                            return "🟢 Work-Life Balance", f"Superstars work {abs(diff_val):.0f} hrs LESS."
+                        else:
+                            return "🔴 High Workload", f"Superstars work harder."
+                    elif metric == 'last_evaluation':
+                        if diff_val > 0:
+                            return "🟢 High Performance", f"Superstars score {diff_val:.2f} points higher."
+                        else:
+                            return "🔴 Low Performance", f"Superstars score lower."
+                    else:
+                        return "📊 " + metric_name, f"Difference of {diff_val:.2f}"
+
+                cols = [col_dna1, col_dna2, col_dna3]
+                for i, col in enumerate(cols):
+                    if i < len(top_3_diff):
+                        row = top_3_diff.iloc[i]
+                        title, text = get_dna_insight(row['Metric'], row['Difference'])
+                        
+                        st.markdown(f"""
+                        <div class="custom-card" style="text-align: center; border-top: 4px solid #17B794;">
+                            <h3 style="margin-top: 0;">{title}</h3>
+                            <p style="color: #c9d1d9; font-size: 0.9rem;">{text}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                # --- ACTIONABLE HIRING CHECKLIST ---
                 st.markdown("---")
-                st.markdown("### 📝 Hiring Strategy Insights")
-                st.write("Based on the data, here is how to tweak your hiring process:")
+                st.markdown("### 📝 Hiring Checklist (Do's & Don'ts)")
+                st.write("Based on the data, apply these filters to your next job opening:")
+
+                # Simplified Logic for the Checklist
+                checklist = []
                 
-                insights = []
-                
-                # Logic for insights based on the 'Difference'
-                if profile_df.loc[profile_df['Metric'] == 'satisfaction_level', 'Difference'].values[0] > 0.1:
-                    insights.append("✅ **Focus on Culture Fit:** Our loyal stars are significantly happier. Screen for candidates who prioritize company culture over raw salary.")
-                
-                if profile_df.loc[profile_df['Metric'] == 'average_montly_hours', 'Difference'].values[0] < -10:
-                    insights.append("⚠️ **Avoid Workaholics:** Surprisingly, our most loyal employees work fewer hours than average. Avoid candidates who glorify burnout; look for work-life balance.")
-                
-                if profile_df.loc[profile_df['Metric'] == 'number_project', 'Difference'].values[0] < -0.5:
-                    insights.append("⚖️ **Workload Balance:** Superstars handle fewer projects but with higher quality. In interviews, ask about prioritization skills, not just 'willingness to do anything'.")
-                
-                if profile_df.loc[profile_df['Metric'] == 'last_evaluation', 'Difference'].values[0] > 0.1:
-                    insights.append("🌟 **Hire for Excellence:** Loyal employees maintain high performance over time. Verify past performance rigorously during reference checks.")
-                    
-                if not insights:
-                    insights.append("🔍 The profile of Superstars is very similar to the average. This suggests that tenure or specific departmental training might be the key differentiator, not the hiring profile itself.")
-                    
-                for insight in insights:
-                    st.info(insight)
+                # Satisfaction Check
+                if (super_mean['satisfaction_level'] - avg_mean['satisfaction_level']) > 0.1:
+                    checklist.append({
+                        "Type": "✅ DO Look For",
+                        "Rule": "Candidates who mention 'Culture', 'Team', or 'Values' as their top reason for leaving previous jobs."
+                    })
+                else:
+                    checklist.append({
+                        "Type": "⚠️ CAUTION",
+                        "Rule": "Satisfaction isn't a major differentiator here. Don't over-prioritize 'culture fit' questions."
+                    })
+
+                # Hours Check
+                if (super_mean['average_montly_hours'] - avg_mean['average_montly_hours']) < -10:
+                    checklist.append({
+                        "Type": "✅ DO Look For",
+                        "Rule": "Candidates who demonstrate 'Work-Life Balance' and set boundaries."
+                    })
+                    checklist.append({
+                        "Type": "🚫 AVOID",
+                        "Rule": "Candidates who brag about 'sleeping at the office' or working 80-hour weeks."
+                    })
+
+                # Projects Check
+                if (super_mean['number_project'] - avg_mean['number_project']) < -0.5:
+                    checklist.append({
+                        "Type": "✅ DO Look For",
+                        "Rule": "Candidates who focus on 'Quality' and 'Prioritization' rather than taking on everything."
+                    })
+
+                # Display Checklist
+                for item in checklist:
+                    if "DO" in item['Type']:
+                        st.success(f"**{item['Type']}**: {item['Rule']}")
+                    elif "AVOID" in item['Type']:
+                        st.error(f"**{item['Type']}**: {item['Rule']}")
+                    else:
+                        st.warning(f"**{item['Type']}**: {item['Rule']}")
 
 if __name__ == "__main__":
     main()
