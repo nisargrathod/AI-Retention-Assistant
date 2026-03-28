@@ -166,7 +166,7 @@ st.markdown("""
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
-        title={"font": {"size": title_size, "family": "tahoma"}},
+        title={"font": {"size": title_size, "family": "tahoma"},
         hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"},
         paper_bgcolor="#0E1117",
         plot_bgcolor="#161b22",
@@ -176,7 +176,7 @@ def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
 def box_plot(the_df, column):
     fig = px.box(
         data_frame=the_df, x=column, title=f'{column.title().replace("_", " ")} Distribution & 5-Summary',
-        template="plotly_dark", labels={column: column.title().replace("_", " ")}, height=600,
+        template="plotly_dark", labels={column: column.title().replace("_', " ")}, height=600,
         color_discrete_sequence=['#17B794']
     )
     custome_layout(fig, showlegend=False)
@@ -193,7 +193,7 @@ def bar_plot(the_df, column, orientation="v", top_10=False):
                  color=dep.index.astype(str),
                  title=f'Observations Distribution Via {column.title().replace("_', " ")}',
                  color_discrete_sequence=["#17B794"],
-                 labels={"x": column.title().replace("_", " "),
+                 labels={"x": column.title().replace("_', " "),
                          "y": "Count of Employees"},
                  template="plotly_dark",
                  text_auto=True,
@@ -206,7 +206,7 @@ def pie_chart(the_df, column):
     fig = px.pie(data_frame=counts,
                  names=counts.index,
                  values=counts.values,
-                 title=f'Popularity of {column.title().replace("_', " ")}',
+                 title=f'Popularity of {column.title().replace("_", " ")}',
                  color_discrete_sequence=["#17B794", "#EEB76B", "#9C3D54"],
                  template="plotly_dark",
                  height=650
@@ -549,7 +549,7 @@ def main():
                 'Budget Planner',
                 'AI Assistant',
                 'AI Research Lab',
-                'Strategic Roadmap'  # NEW MENU ITEM
+                'Strategic Roadmap'  
             ],  
             icons=['house', 'bar-chart-line-fill', "graph-up-arrow", 'helpful-tip-fill', 'currency-rupee', 'robot', 'cpu', 'flag-2-fill'], 
             menu_icon="cast", default_index=0, 
@@ -1209,7 +1209,6 @@ def main():
                                         <div style="display: flex; align-items: center; margin-bottom: 10px;">
                                             <span style="font-size: 1.5rem; margin-right: 10px;">{icon}</span>
                                             <h4 style="margin: 0; color: #fff;">{title}</h4>
-                                        </div>
                                         <p style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;">{advice}</p>
                                         <small style="color: #8b949e;'>Driver: {feature_name.replace('_', ' ').title()}</small>
                                     </div>
@@ -1437,7 +1436,7 @@ def main():
             </p>
             """, unsafe_allow_html=True)
             
-            # 1. Define the "Superstar" Criteria
+            # 1. Define the "Superstar" Criteria (Loyal + High Performance)
             # Loyal: Time Spent > 4 Years AND Still with company (left=0)
             # High Performer: Last Evaluation > 0.8
             superstar_mask = (df['left'] == 0) & (df['time_spend_company'] > 4) & (df['last_evaluation'] > 0.8)
@@ -1520,8 +1519,8 @@ def main():
                         else:
                             return "🔴 Low Performance", f"Superstars score lower."
                     else:
-                        return "📊 " + metric_name, f"Difference of {diff_val:.2f}"
-
+                        return "📊 " + metric_name, f"Difference of {diff_val:.2f}."
+                
                 cols = [col_dna1, col_dna2, col_dna3]
                 for i, col in enumerate(cols):
                     if i < len(top_3_diff):
@@ -1531,7 +1530,7 @@ def main():
                         st.markdown(f"""
                         <div class="custom-card" style="text-align: center; border-top: 4px solid #17B794;">
                             <h3 style="margin-top: 0;">{title}</h3>
-                            <p style="color: #c9d1d9; font-size: 0.9rem;">{text}</p>
+                            <p style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;">{text}</p>
                         </div>
                         """, unsafe_allow_html=True)
 
@@ -1614,7 +1613,7 @@ def main():
                         llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.5)
                         
                         template = """
-                        You are an expert HR Strategist and Project Manager.
+                        You are an expert HR Strategist.
                         
                         **Company Context:**
                         Our AI has identified the following critical attrition drivers: {issues}.
@@ -1695,8 +1694,7 @@ def main():
             current_workforce = len(df)
             
             # Calculate current monthly hazard rate based on model predictions
-            # We approximate: Annual Risk Probability / 12
-            current_risk_prob = pipeline.predict_proba(df.drop('left', axis=1))[:, 1].mean()
+            current_risk_prob = pipeline.predict_proba(df.drop('left', axis=1))[:, 1]
             monthly_hazard_current = current_risk_prob / 12
             
             # Scenario 1: Business as Usual (No improvement)
@@ -1741,8 +1739,8 @@ def main():
                                    template="plotly_dark",
                                    markers=True,
                                    color_discrete_map={
-                                       'Business as Usual (Do Nothing)': '#FF4B4B', # Red line dropping
-                                       'With Intervention (Roadmap)': '#17B794'   # Green line stabilizing
+                                       'Business as Usual (Do Nothing)': "#FF4B4B", # Red line dropping
+                                       'With Intervention (Roadmap)': "#17B794"   # Green line stabilizing
                                    })
             
             fig_forecast.update_layout(yaxis_title="Employee Headcount", xaxis=dict(dtick=1))
