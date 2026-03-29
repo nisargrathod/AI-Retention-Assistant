@@ -1583,30 +1583,41 @@ def main():
                         st.warning(f"**{item['Type']}**: {item['Rule']}")
 
     # ====================================================================
-    # Page: STRATEGIC ROADMAP & FUTURE FORECAST (NEW)
+    # Page: STRATEGIC ROADMAP & FUTURE FORECAST (HR FRIENDLY UPDATE)
     # ====================================================================
     if page == "Strategic Roadmap":
-        st.header("🚀 Strategic Roadmap & Future Forecast")
-        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>From Diagnosis to Execution. Plan for the next 6 months and project the future of your workforce.</p>", unsafe_allow_html=True)
+        st.header("🚀 Strategic Roadmap & Future Planning")
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>A step-by-step guide to stabilize your workforce and plan for the future. Use this to build your presentation for leadership.</p>", unsafe_allow_html=True)
         
         # --- PART 1: THE ROADMAP (LLM GENERATED) ---
-        st.markdown("### 🗓️ 6-Month Execution Roadmap")
-        st.write("Let AI draft your implementation timeline based on the company's biggest risk factors.")
+        st.markdown("### 📋 Step 1: Get Your 6-Month Action Plan")
         
-        # Get Top Drivers dynamically
+        # Pre-calculate why we are making a plan
         avg_sat = df['satisfaction_level'].mean()
         avg_hours = df['average_montly_hours'].mean()
         avg_projects = df['number_project'].mean()
         
         issues = []
         if avg_sat < 0.6: issues.append("Low Employee Satisfaction")
-        if avg_hours > 200: issues.append("Excessive Workload (Burnout)")
-        if avg_projects > 4: issues.append("Project Imbalance")
-        if len(issues) == 0: issues.append("General Retention Strategy")
+        if avg_hours > 200: issues.append("Employee Burnout (High Working Hours)")
+        if avg_projects > 4: issues.append("Unbalanced Workload (Too Many Projects)")
+        if len(issues) == 0: issues.append("Standard Workforce Stabilization")
         
         issues_str = ", ".join(issues)
         
-        if st.button("Generate Action Roadmap", type="primary"):
+        # HR FRIENDLY: Show the "Why" before asking them to click
+        st.markdown(f"""
+        <div class="custom-card">
+            <h4 style="color: #17B794; margin-top: 0;">🩺 AI Diagnostic Summary</h4>
+            <p style="color: #c9d1d9; line-height: 1.6;">
+                Before making a plan, here is what the AI flagged as your company's biggest risks:<br>
+                <strong style="color: #FF4B4B;">➤ {issues_str}</strong>
+            </p>
+            <small style="color: #8b949e;">Click the button below to generate a custom 6-month HR strategy based exactly on these problems.</small>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("✍️ Draft My 6-Month HR Action Plan", type="primary"):
             with st.spinner("Drafting your 6-month strategy..."):
                 try:
                     api_key = st.secrets.get("GROQ_API_KEY", None)
@@ -1614,7 +1625,7 @@ def main():
                         llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.5)
                         
                         template = """
-                        You are an expert HR Strategist.
+                        You are an expert HR Strategist speaking to an HR Manager.
                         
                         **Company Context:**
                         Our AI has identified the following critical attrition drivers: {issues}.
@@ -1627,7 +1638,10 @@ def main():
                         2. **Specific Actionable Steps** (2-3 bullet points)
                         3. **Success Metrics** (How do we know it worked?)
                         
-                        **Format:** Use clean Markdown formatting. Be concise and professional.
+                        **Tone & Formatting:** 
+                        - Use clean Markdown formatting. 
+                        - Be concise, practical, and avoid overly technical AI jargon. 
+                        - Focus on actions an HR person can actually take (e.g., "Run stay interviews", not "Optimize parameters").
                         """
                         
                         prompt = PromptTemplate.from_template(template)
@@ -1675,21 +1689,27 @@ def main():
 
         st.markdown("---")
         
-        # --- PART 2: THE FUTURE FORECAST (MATHEMATICAL) ---
-        st.markdown("### 📈 12-Month Workforce Forecast")
-        st.write("Visualize the long-term impact of your intervention. Compare 'Business as Usual' vs. 'With Intervention'.")
+        # --- PART 2: THE FUTURE FORECAST (HR FRIENDLY MATH) ---
+        st.markdown("### 📈 Step 2: See the Future Impact (12-Month Projection)")
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Adjust the sliders below to match your realistic expectations. This will show leadership the hard numbers of why we need this plan.</p>", unsafe_allow_html=True)
         
         # Controls for Simulation
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            intervention_efficacy = st.slider("Expected Intervention Success Rate (%)", 0, 50, 20, 5, 
-                                          help="What % of high-risk employees do you expect to save with your roadmap?")
+            intervention_efficacy = st.slider(
+                "How effective will our plan be? (% of at-risk staff we realistically save)", 
+                10, 50, 20, 5, 
+                help="Be conservative. If 100 people are at risk, and you set this to 20%, you expect to successfully retain 20 people."
+            )
         
         with col_f2:
-            natural_attrition_rate = st.slider("Natural Monthly Attrition Rate (%)", 0.5, 5.0, 1.5, 0.1,
-                                          help="The baseline % of employees expected to leave even with low risk.")
+            natural_attrition_rate = st.slider(
+                "Unavoidable monthly resignations (Industry Baseline %)", 
+                0.5, 2.0, 1.0, 0.1,
+                help="People leave for personal reasons (spouse relocation, career change, family issues) that no HR plan can fix. This is that baseline %."
+            )
 
-        if st.button("Run Forecast Simulation", type="secondary"):
+        if st.button("📈 Show Me the 12-Month Projection", type="primary"):
             # Simulation Logic
             months = list(range(1, 13))
             current_workforce = len(df)
@@ -1728,32 +1748,47 @@ def main():
             # Visualization
             forecast_df = pd.DataFrame({
                 'Month': months,
-                'Business as Usual (Do Nothing)': forecast_bau,
-                'With Intervention (Roadmap)': forecast_intervention
+                'If We Do Nothing (Status Quo)': forecast_bau,
+                'If We Follow the Plan': forecast_intervention
             }).melt(id_vars='Month', var_name='Scenario', value_name='Workforce Count')
             
             fig_forecast = px.line(forecast_df, 
                                    x='Month', 
                                    y='Workforce Count', 
                                    color='Scenario',
-                                   title="Projected Workforce Size (12 Months)",
+                                   title="Projected Workforce Size Over the Next 12 Months",
                                    template="plotly_dark",
                                    markers=True,
                                    color_discrete_map={
-                                       'Business as Usual (Do Nothing)': "#FF4B4B", # Red line dropping
-                                       'With Intervention (Roadmap)': "#17B794"   # Green line stabilizing
+                                       'If We Do Nothing (Status Quo)': "#FF4B4B", # Red line dropping
+                                       'If We Follow the Plan': "#17B794"   # Green line stabilizing
                                    })
             
-            fig_forecast.update_layout(yaxis_title="Employee Headcount", xaxis=dict(dtick=1))
+            fig_forecast.update_layout(yaxis_title="Total Employee Headcount", xaxis=dict(dtick=1))
             st.plotly_chart(fig_forecast, use_container_width=True)
             
-            # Insight Calculation
+            # --- HR FRIENDLY FINANCIAL SUMMARY ---
             saved_employees = forecast_intervention[-1] - forecast_bau[-1]
+            
+            # Calculate estimated money saved
+            avg_salary = df['salary'].map({'low': 400000, 'medium': 600000, 'high': 900000}).mean()
+            replacement_cost_per_emp = avg_salary * 0.5 # Standard HR metric: 50% of salary to replace
+            total_money_saved = int(saved_employees) * replacement_cost_per_emp
+            
+            st.markdown("---")
+            st.markdown("### 🏢 HR Director Summary (For Leadership)")
+            
+            col_sum_1, col_sum_2 = st.columns(2)
+            with col_sum_1:
+                st.metric("Employees Saved by Plan", f"{int(saved_employees)} People")
+            with col_sum_2:
+                st.metric("Estimated Recruitment Costs Prevented", f"₹{total_money_saved:,.0f}", delta="Financial Value")
+            
             st.success(f"""
-            **Impact Projection:**
-            By executing your roadmap with an estimated {intervention_efficacy}% success rate, 
-            you are projected to save approximately <strong>{int(saved_employees)} employees</strong> over the next year 
-            compared to doing nothing.
+            **The Bottom Line:** 
+            If we execute our 6-month plan and successfully retain just **{intervention_efficacy}%** of our at-risk staff, 
+            we will finish the year with **{int(forecast_intervention[-1])} employees** instead of **{int(forecast_bau[-1])}**.
+            This prevents approximately **₹{total_money_saved:,.0f}** in recruitment, onboarding, and lost productivity costs.
             """)
 
 if __name__ == "__main__":
