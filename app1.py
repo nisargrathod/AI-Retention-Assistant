@@ -275,7 +275,6 @@ def analyze_why_people_leave(df):
     st.markdown("### 🔍 Why do people leave?")
     st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Our AI has analyzed the data to find the root causes of attrition.</p>", unsafe_allow_html=True)
     
-    # GLOBAL SAFEGUARD: Check if default columns exist
     required_cols = ['salary', 'satisfaction_level', 'average_montly_hours', 'number_project']
     if all(col in df.columns for col in required_cols):
         df_causal = df.copy()
@@ -346,12 +345,11 @@ def plan_retention_budget(df, pipeline, budget_limit):
         st.success("🎉 Great news! The workforce is stable.")
         return None
 
-    # GLOBAL SAFEGUARD: Handle missing salary column
     if 'salary' in df.columns:
         salary_val_map = {'low': 400000, 'medium': 600000, 'high': 900000}
         high_risk_df['annual_salary'] = high_risk_df['salary'].map(salary_val_map)
     else:
-        high_risk_df['annual_salary'] = 500000 # Assume flat 5L for unknown datasets
+        high_risk_df['annual_salary'] = 500000 
 
     high_risk_df['replacement_cost'] = high_risk_df['annual_salary'] * 0.5
     high_risk_df['expected_loss'] = high_risk_df['attrition_risk'] * high_risk_df['replacement_cost']
@@ -462,7 +460,7 @@ def run_groq_consultant(employee_name, department, situation, solution, budget):
 # Main App Function
 # ====================================================================
 def main():
-    st.set_page_config(page_title="Global Employee Retention AI", page_icon="🤖", layout="wide")
+    st.set_page_config(page_title="RetainAI | Enterprise Workforce Intelligence", page_icon="🧠", layout="wide")
     warnings.simplefilter(action='ignore', category=FutureWarning)
 
     # ====================================================================
@@ -534,7 +532,6 @@ def main():
     def get_retention_strategies(employee_data):
         strategies = []
         if isinstance(employee_data, pd.DataFrame): employee_data = employee_data.iloc[0]
-        # GLOBAL SAFEGUARD: Check index before calling
         if 'satisfaction_level' in employee_data.index and employee_data['satisfaction_level'] <= 0.45: strategies.append("🗣️ Conduct 1-on-1 meeting.")
         if 'number_project' in employee_data.index:
             if employee_data['number_project'] <= 2: strategies.append("📈 Discuss career aspirations.")
@@ -550,8 +547,9 @@ def main():
     with st.sidebar:
         st.markdown("""
         <div style='padding: 20px; text-align: center;'>
-            <h1 style='font-size: 1.8rem; color: #17B794; margin-bottom: 0;'>Global AI Retention</h1>
-            <p style='color: #8b949e; font-size: 0.9rem; margin-top: 5px;'>Enterprise Dashboard</p>
+            <h1 style='font-size: 1.8rem; color: #17B794; margin-bottom: 0;'>RetainAI</h1>
+            <p style='color: #8b949e; font-size: 0.9rem; margin-top: 5px; letter-spacing: 1px;'>ENTERPRISE WORKFORCE INTELLIGENCE</p>
+            <p style='color: #555d6b; font-size: 0.75rem; margin-top: 5px;'>Predict • Prevent • Optimize Attrition</p>
         </div>
         <hr style='border-color: #30363d; margin: 20px 0;'>
         """, unsafe_allow_html=True)
@@ -622,7 +620,6 @@ def main():
         st.markdown("<p style='color: #9ca3af; font-size: 1.1rem; margin-top: 0;'>Here is your workforce overview.</p>", unsafe_allow_html=True)
         total_employees = len(df); attrition_rate = (df['left'].sum() / len(df)) * 100
         
-        # GLOBAL SAFEGUARD for Home Metrics
         if 'satisfaction_level' in df.columns:
             col1, col2, col3 = st.columns(3)
             col1.metric("Total Workforce", f"{total_employees:,}")
@@ -671,14 +668,13 @@ def main():
 
         st.markdown("---")
         feature_columns = [c for c in df.columns if c != 'left']
-        is_default_data = 'satisfaction_level' in feature_columns # Magic check for beautiful UI
+        is_default_data = 'satisfaction_level' in feature_columns 
 
         with st.form("Predict_value_form"):
             st.markdown("##### 👤 Employee Profile")
             input_data = {}
             
             if is_default_data:
-                # ORIGINAL BEAUTIFUL HR SLIDERS
                 satisfaction_map = {'Very Dissatisfied': 0.1, 'Dissatisfied': 0.3, 'Neutral': 0.5, 'Satisfied': 0.7, 'Very Satisfied': 0.9}
                 evaluation_map = {'Needs Improvement': 0.4, 'Meets Expectations': 0.7, 'Exceeds Expectations': 0.9}
                 c1, c2 = st.columns(2)
@@ -696,7 +692,6 @@ def main():
                 
                 input_data = {'satisfaction_level': satisfaction_map[satisfaction_text], 'last_evaluation': evaluation_map[evaluation_text], 'number_project': number_project, 'average_montly_hours': average_montly_hours, 'time_spend_company': time_spend_company, 'Work_accident': 1 if work_accident_text == 'Yes' else 0, 'promotion_last_5years': 1 if promotion_text == 'Yes' else 0, 'Department': Department, 'salary': salary}
             else:
-                # DYNAMIC AUTO-GENERATOR FOR GLOBAL DATA
                 cols = st.columns(2)
                 for i, col in enumerate(feature_columns):
                     with cols[i%2]:
@@ -720,7 +715,7 @@ def main():
             input_df = pd.DataFrame([input_data])
             with st.spinner('AI is analyzing...'):
                 sleep(1)
-                input_df = input_df[feature_columns] # Ensure correct column order
+                input_df = input_df[feature_columns] 
                 prediction = pipeline.predict(input_df)[0]; prediction_probas = pipeline.predict_proba(input_df)[0]
                 st.session_state.prediction_result = prediction; st.session_state.input_df = input_df; st.session_state.prediction_probas = prediction_probas
 
@@ -840,8 +835,6 @@ def main():
                 m3.metric("Projected Savings", f"₹{total_savings:,.0f}", delta="ROI Positive")
                 st.markdown("<br>", unsafe_allow_html=True); st.markdown("### 📋 Actionable Retention List")
                 st.caption("Target these employees with a 10% retention bonus. It is cheaper to retain than to replace.")
-                
-                # GLOBAL SAFEGUARD: Handle columns dynamically for display
                 display_cols = [c for c in selected_df.columns if c in ['Department', 'department', 'salary', 'satisfaction_level', 'number_project', 'attrition_risk', 'intervention_cost', 'net_savings']]
                 if len(display_cols) > 0:
                     display_df = selected_df[display_cols].copy()
@@ -865,7 +858,6 @@ def main():
             c1, c2 = st.columns(2)
             with c1:
                 emp_name = st.text_input("Employee Name", value="Rahul Sharma")
-                # GLOBAL SAFEGUARD: Text input if Department missing
                 if 'Department' in df.columns: emp_dept = st.selectbox("Department", df['Department'].unique())
                 else: emp_dept = st.text_input("Department", value="Sales")
             with c2:
@@ -899,7 +891,6 @@ def main():
 
         with tab2:
             st.subheader("🔬 Departmental Strategy Deep Dive")
-            # GLOBAL SAFEGUARD
             if 'Department' not in df.columns:
                 st.warning("Department column not found in this dataset. Cannot run deep dive.")
             else:
@@ -955,7 +946,6 @@ def main():
             happy_leavers_indices = np.where((y_pred == 0) & (y_true == 1))[0]; df_happy_leavers = df.iloc[happy_leavers_indices]
             loyal_sufferers_indices = np.where((y_pred == 1) & (y_true == 0))[0]; df_loyal_sufferers = df.iloc[loyal_sufferers_indices]
             
-            # GLOBAL SAFEGUARD FOR STATS
             numeric_cols_anomaly = df.select_dtypes(include=np.number).columns.tolist()
             def get_profile_stats(df_group):
                 if len(df_group) == 0: return None
@@ -987,7 +977,6 @@ def main():
             st.subheader("📊 Retention Priority Matrix")
             st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>A strategic view to prioritize your HR efforts. <br>We map <strong>Attrition Risk</strong> against <strong>Replacement Cost</strong> to identify who needs immediate attention vs. who is safe to let go.</p>", unsafe_allow_html=True)
             X_all = df.drop('left', axis=1); risk_probs = pipeline.predict_proba(X_all)[:, 1]
-            # GLOBAL SAFEGUARD
             if 'salary' in df.columns:
                 salary_cost_map = {'low': 400000, 'medium': 600000, 'high': 900000} 
                 replacement_costs = df['salary'].map(salary_cost_map) * 0.5 
@@ -1013,7 +1002,6 @@ def main():
         with tab5:
             st.subheader("🎯 The 'Ideal Candidate' Profiler")
             st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Shift from Retention to <strong>Acquisition</strong>. <br>We analyze your 'Superstars' (Loyal + High Performers) to build a clear hiring checklist.</p>", unsafe_allow_html=True)
-            # GLOBAL SAFEGUARD
             if 'time_spend_company' in df.columns and 'last_evaluation' in df.columns:
                 superstar_mask = (df['left'] == 0) & (df['time_spend_company'] > 4) & (df['last_evaluation'] > 0.8)
             else:
@@ -1071,7 +1059,6 @@ def main():
         
         # --- PART 1: THE ROADMAP ---
         st.markdown("### 📋 Step 1: Get Your 6-Month Action Plan")
-        # GLOBAL SAFEGUARD
         avg_sat = df['satisfaction_level'].mean() if 'satisfaction_level' in df.columns else 0.5
         avg_hours = df['average_montly_hours'].mean() if 'average_montly_hours' in df.columns else 0
         avg_projects = df['number_project'].mean() if 'number_project' in df.columns else 0
@@ -1136,7 +1123,6 @@ def main():
             fig_forecast.update_layout(yaxis_title="Total Employee Headcount", xaxis=dict(dtick=1)); st.plotly_chart(fig_forecast, use_container_width=True)
             saved_employees = forecast_intervention[-1] - forecast_bau[-1]
             
-            # GLOBAL SAFEGUARD FOR SALARY
             if 'salary' in df.columns: avg_salary = df['salary'].map({'low': 400000, 'medium': 600000, 'high': 900000}).mean()
             else: avg_salary = 500000
             
