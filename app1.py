@@ -166,7 +166,7 @@ st.markdown("""
 def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
     fig.update_layout(
         showlegend=showlegend,
-        title={"font": {"size": title_size, "family": "tahoma"},
+        title={"font": {"size": title_size, "family": "tahoma"}},
         hoverlabel={"bgcolor": "#000", "font_size": hover_font_size, "font_family": "arial"},
         paper_bgcolor="#0E1117",
         plot_bgcolor="#161b22",
@@ -176,7 +176,7 @@ def custome_layout(fig, title_size=28, hover_font_size=18, showlegend=False):
 def box_plot(the_df, column):
     fig = px.box(
         data_frame=the_df, x=column, title=f'{column.title().replace("_", " ")} Distribution & 5-Summary',
-        template="plotly_dark", labels={column: column.title().replace("_', " ")}, height=600,
+        template="plotly_dark", labels={column: column.title().replace("_", " ")}, height=600,
         color_discrete_sequence=['#17B794']
     )
     custome_layout(fig, showlegend=False)
@@ -191,9 +191,9 @@ def bar_plot(the_df, column, orientation="v", top_10=False):
                  y=dep.values,
                  orientation=orientation,
                  color=dep.index.astype(str),
-                 title=f'Observations Distribution Via {column.title().replace("_', " ")}',
+                 title=f'Observations Distribution Via {column.title().replace("_", " ")}',
                  color_discrete_sequence=["#17B794"],
-                 labels={"x": column.title().replace("_', " "),
+                 labels={"x": column.title().replace("_", " "),
                          "y": "Count of Employees"},
                  template="plotly_dark",
                  text_auto=True,
@@ -1209,8 +1209,9 @@ def main():
                                         <div style="display: flex; align-items: center; margin-bottom: 10px;">
                                             <span style="font-size: 1.5rem; margin-right: 10px;">{icon}</span>
                                             <h4 style="margin: 0; color: #fff;">{title}</h4>
+                                        </div>
                                         <p style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;">{advice}</p>
-                                        <small style="color: #8b949e;'>Driver: {feature_name.replace('_', ' ').title()}</small>
+                                        <small style="color: #8b949e;">Driver: {feature_name.replace('_', ' ').title()}</small>
                                     </div>
                                     """
                                     with col:
