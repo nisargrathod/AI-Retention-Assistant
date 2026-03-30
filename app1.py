@@ -666,9 +666,12 @@ def main():
         create_vizualization(df, viz_type="pie")
         st.plotly_chart(create_heat_map(df), use_container_width=True)
 
+    # ====================================================================
+    # PAGE: PREDICT ATTRITION (COMPLETE SPLIT-SCREEN UX OVERHAUL)
+    # ====================================================================
     if page == "Predict Attrition":
         st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess risk and get retention strategies.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 10px;'>Adjust the employee profile on the left to see real-time risk assessment on the right.</p>", unsafe_allow_html=True)
         
         with st.expander("🧪 Model Diagnostics (Verification)", expanded=False):
             st.write("Not sure if the AI is working? Test it against real historical data:")
@@ -694,58 +697,73 @@ def main():
         feature_columns = [c for c in df.columns if c != 'left']
         is_default_data = 'satisfaction_level' in feature_columns 
 
-        with st.form("Predict_value_form"):
-            st.markdown("##### 👤 Employee Profile")
-            input_data = {}
+        # SPLIT SCREEN LAYOUT
+        col_input, col_output = st.columns([1, 1], gap="large")
+
+        # ==========================================
+        # LEFT COLUMN: INPUTS
+        # ==========================================
+        with col_input:
+            st.markdown("##### 👤 Employee Profile Inputs")
             
             if is_default_data:
                 satisfaction_map = {'Very Dissatisfied': 0.1, 'Dissatisfied': 0.3, 'Neutral': 0.5, 'Satisfied': 0.7, 'Very Satisfied': 0.9}
                 evaluation_map = {'Needs Improvement': 0.4, 'Meets Expectations': 0.7, 'Exceeds Expectations': 0.9}
-                c1, c2 = st.columns(2)
-                with c1:
-                    satisfaction_text = st.select_slider('Satisfaction Level', options=satisfaction_map.keys())
-                    evaluation_text = st.select_slider('Last Evaluation Score', options=evaluation_map.keys())
-                    number_project = st.slider('Number of Projects', 2, 7, 4)
-                    average_montly_hours = st.slider('Avg. Monthly Hours', 90, 310, 200)
-                    time_spend_company = st.slider('Years at Company', 2, 10, 3)
-                with c2:
-                    work_accident_text = st.selectbox('Work Accident', ('No', 'Yes'))
-                    promotion_text = st.selectbox('Promotion in Last 5 Years', ('No', 'Yes'))
-                    Department = st.selectbox('Department', df['Department'].unique())
-                    salary = st.selectbox('Salary', df['salary'].unique())
+                
+                satisfaction_text = st.select_slider('Satisfaction Level', options=satisfaction_map.keys(), key="sat_sel")
+                evaluation_text = st.select_slider('Last Evaluation Score', options=evaluation_map.keys(), key="eval_sel")
+                number_project = st.slider('Number of Projects', 2, 7, 4, key="proj_slid")
+                average_montly_hours = st.slider('Avg. Monthly Hours', 90, 310, 200, key="hours_slid")
+                time_spend_company = st.slider('Years at Company', 2, 10, 3, key="time_slid")
+                work_accident_text = st.selectbox('Work Accident', ('No', 'Yes'), key="acc_sel")
+                promotion_text = st.selectbox('Promotion in Last 5 Years', ('No', 'Yes'), key="prom_sel")
+                Department = st.selectbox('Department', df['Department'].unique(), key="dept_sel")
+                salary = st.selectbox('Salary', df['salary'].unique(), key="sal_sel")
                 
                 input_data = {'satisfaction_level': satisfaction_map[satisfaction_text], 'last_evaluation': evaluation_map[evaluation_text], 'number_project': number_project, 'average_montly_hours': average_montly_hours, 'time_spend_company': time_spend_company, 'Work_accident': 1 if work_accident_text == 'Yes' else 0, 'promotion_last_5years': 1 if promotion_text == 'Yes' else 0, 'Department': Department, 'salary': salary}
             else:
-                cols = st.columns(2)
-                for i, col in enumerate(feature_columns):
-                    with cols[i%2]:
-                        if df[col].dtype == 'object' or df[col].dtype.name == 'category':
-                            input_data[col] = st.selectbox(col.replace('_', ' ').title(), df[col].unique())
-                        else:
-                            min_val = float(df[col].min()); max_val = float(df[col].max())
-                            if df[col].nunique() > 50: input_data[col] = st.number_input(col.replace('_', ' ').title(), value=float(df[col].mean()), min_value=min_val, max_value=max_val)
-                            else: input_data[col] = st.slider(col.replace('_', ' ').title(), min_value=min_val, max_value=max_val, value=float(df[col].mean()))
+                input_data = {}
+                for col in feature_columns:
+                    if df[col].dtype == 'object' or df[col].dtype.name == 'category':
+                        input_data[col] = st.selectbox(col.replace('_', ' ').title(), df[col].unique(), key=f"inp_{col}")
+                    else:
+                        min_val = float(df[col].min()); max_val = float(df[col].max())
+                        if df[col].nunique() > 50: input_data[col] = st.number_input(col.replace('_', ' ').title(), value=float(df[col].mean()), min_value=min_val, max_value=max_val, key=f"inp_{col}")
+                        else: input_data[col] = st.slider(col.replace('_', ' ').title(), min_value=min_val, max_value=max_val, value=float(df[col].mean()), key=f"inp_{col}")
 
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1: predict_button = st.form_submit_button(label='🔮 Analyze Employee', type='primary')
-            with col_btn2: test_high_risk = st.form_submit_button(label='🔥 Simulate High-Risk Employee', type='secondary')
+            st.markdown("<br>")
+            analyze_btn = st.button("🔮 Analyze Profile", type="primary", use_container_width=True)
+            
+            # --- "WHAT-IF" SIMULATOR ---
+            st.markdown("---"); st.markdown("#### ⚡ Quick 'What-If' Simulator")
+            st.caption("Click a scenario to instantly update sliders and see the impact.")
+            c_sim1, c_sim2 = st.columns(2)
+            with c_sim1:
+                if st.button("💰 Give Raise", use_container_width=True): st.session_state.sal_sel = 'high'; st.rerun()
+                if st.button("📈 Reduce Hours", use_container_width=True): st.session_state.hours_slid = 150; st.rerun()
+            with c_sim2:
+                if st.button("🤝 Boost Morale", use_container_width=True): st.session_state.sat_sel = 'Very Satisfied'; st.rerun()
+                if st.button("🔥 Load High Risk", use_container_width=True): 
+                    st.session_state.sat_sel = 'Very Dissatisfied'; st.session_state.hours_slid = 310; st.session_state.proj_slid = 7; st.session_state.sal_sel = 'low'; st.rerun()
 
-        if 'prediction_result' not in st.session_state:
-            st.session_state.prediction_result = None
-            st.session_state.input_df = None
-            st.session_state.prediction_probas = None
+        # ==========================================
+        # RIGHT COLUMN: OUTPUTS
+        # ==========================================
+        with col_output:
+            if 'prediction_result' not in st.session_state:
+                st.session_state.prediction_result = None
+                st.session_state.input_df = None
+                st.session_state.prediction_probas = None
 
-        if predict_button:
-            input_df = pd.DataFrame([input_data])
-            with st.spinner('AI is analyzing...'):
-                sleep(1)
-                input_df = input_df[feature_columns] 
+            if analyze_btn:
+                input_df = pd.DataFrame([input_data])[feature_columns] 
+                with st.spinner('Calculating...'): sleep(0.5) # Faster feedback
                 prediction = pipeline.predict(input_df)[0]
                 raw_probas = pipeline.predict_proba(input_df)[0]
                 
                 # ✅ FIX #5: Probability Clipping (Prevents 0% and 100%)
-                MIN_PROB = 0.05
-                MAX_PROB = 0.95
+                MIN_PROB = 0.02
+                MAX_PROB = 0.98
                 prediction_probas = np.clip(raw_probas, MIN_PROB, MAX_PROB)
                 prediction_probas = prediction_probas / prediction_probas.sum()
                 
@@ -753,128 +771,131 @@ def main():
                 st.session_state.input_df = input_df
                 st.session_state.prediction_probas = prediction_probas
 
-        if test_high_risk and is_default_data:
-            input_data = {'satisfaction_level': 0.1, 'last_evaluation': 0.7, 'number_project': 7, 'average_montly_hours': 310, 'time_spend_company': 4, 'Work_accident': 1, 'promotion_last_5years': 0, 'Department': Department, 'salary': 'low'}
-            input_df = pd.DataFrame([input_data])
-            with st.spinner('Simulating high-risk scenario...'):
-                sleep(1)
-                prediction = pipeline.predict(input_df)[0]
-                raw_probas = pipeline.predict_proba(input_df)[0]
+            if st.session_state.prediction_result is not None:
+                stay_prob = st.session_state.prediction_probas[0]
+                leave_prob = st.session_state.prediction_probas[1]
+                risk_percentage = leave_prob * 100
                 
-                # ✅ FIX #5: Probability Clipping applied here too
-                MIN_PROB = 0.05
-                MAX_PROB = 0.95
-                prediction_probas = np.clip(raw_probas, MIN_PROB, MAX_PROB)
-                prediction_probas = prediction_probas / prediction_probas.sum()
+                # Determine Color & Label based on exact percentage
+                if risk_percentage <= 15: risk_color, risk_bg, risk_label = "#17B794", "#17B79420", "🟢 Very Low Risk"
+                elif risk_percentage <= 35: risk_color, risk_bg, risk_label = "#7CE09A", "#7CE09A20", "🟩 Low Risk"
+                elif risk_percentage <= 55: risk_color, risk_bg, risk_label = "#F59E0B", "#F59E0B20", "🟨 Moderate Risk"
+                elif risk_percentage <= 75: risk_color, risk_bg, risk_label = "#FF8C00", "#FF8C0020", "🟧 High Risk"
+                else: risk_color, risk_bg, risk_label = "#FF4B4B", "#FF4B4B20", "🔴 Critical Risk"
+
+                # Main Result Card
+                st.markdown(f"""
+                <div style='background-color: {risk_bg}; border: 2px solid {risk_color}; border-radius: 16px; padding: 25px; text-align: center; margin-bottom: 20px;'>
+                    <h2 style='color: {risk_color}; margin: 0 0 10px 0; font-size: 1.5rem;'>{risk_label}</h2>
+                    <div style='font-size: 4rem; font-weight: 800; color: {risk_color}; line-height: 1;'>
+                        {risk_percentage:.1f}%
+                    </div>
+                    <p style='color: #8b949e; margin-top: 10px; font-size: 0.9rem;'>Probability of Leaving</p>
+                    
+                    <div style="margin-top: 20px; background: #21262d; border-radius: 10px; overflow: hidden; height: 25px; display: flex;">
+                        <div style="width: {stay_prob*100}%; background: #17B794; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.8rem;">
+                            STAY {stay_prob:.0%}
+                        </div>
+                        <div style="width: {leave_prob*100}%; background: {risk_color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.8rem;">
+                            LEAVE {leave_prob:.0%}
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # --- DYNAMIC CONTEXTUAL EXPLANATION ---
+                st.markdown("### 🧠 Why is it this score?")
+                st.markdown("<p style='color: #8b949e; font-size: 0.85rem; margin-bottom: 15px;'>Based on your exact slider inputs, here are the factors dragging the score up or down:</p>", unsafe_allow_html=True)
                 
-                st.session_state.prediction_result = prediction
-                st.session_state.input_df = input_df
-                st.session_state.prediction_probas = prediction_probas
-                st.toast("High-Risk Profile Loaded", icon="🔥")
+                positive_factors = []
+                negative_factors = []
+                
+                if is_default_data:
+                    if input_data['satisfaction_level'] >= 0.7: positive_factors.append("High satisfaction level")
+                    elif input_data['satisfaction_level'] <= 0.3: negative_factors.append("Very low satisfaction level")
+                    
+                    if input_data['average_montly_hours'] <= 160: positive_factors.append("Healthy working hours")
+                    elif input_data['average_montly_hours'] >= 250: negative_factors.append("Severe overwork (high hours)")
+                    
+                    if input_data['number_project'] >= 3 and input_data['number_project'] <= 5: positive_factors.append("Balanced project load")
+                    elif input_data['number_project'] > 5: negative_factors.append("Too many projects (burnout risk)")
+                    
+                    if input_data['salary'] == 'high': positive_factors.append("Top-tier salary")
+                    elif input_data['salary'] == 'low': negative_factors.append("Low salary tier")
+                    
+                    if input_data['promotion_last_5years'] == 1: positive_factors.append("Recent promotion")
+                    elif input_data['time_spend_company'] >= 4 and input_data['promotion_last_5years'] == 0: negative_factors.append("Stagnation (4+ yrs, no promotion)")
 
-        if st.session_state.prediction_result is not None:
-            st.markdown("---")
-            pred_col, stay_prob_col, leave_prob_col = st.columns(3)
-            with pred_col:
-                if st.session_state.prediction_result == 0: st.markdown("<div class='custom-card' style='text-align: center; border: 1px solid #17B794;'><h2 style='color: #17B794;'>STAY</h2><p>Employee is likely to stay.</p></div>", unsafe_allow_html=True)
-                else: st.markdown("<div class='custom-card' style='text-align: center; border: 1px solid #FF4B4B;'><h2 style='color: #FF4B4B;'>LEAVE</h2><p>High risk of attrition.</p></div>", unsafe_allow_html=True)
-            with stay_prob_col: st.metric("Stay Probability", f"{st.session_state.prediction_probas[0]:.1%}")
-            with leave_prob_col: st.metric("Leave Probability", f"{st.session_state.prediction_probas[1]:.1%}")
-            
-            # ✅ FIX #6: Added the Confidence Gauge UI
-            stay_prob = st.session_state.prediction_probas[0]
-            leave_prob = st.session_state.prediction_probas[1]
-            confidence = max(stay_prob, leave_prob)
+                c_pos, c_neg = st.columns(2)
+                with c_pos:
+                    if positive_factors:
+                        for f in positive_factors:
+                            st.markdown(f"<div style='background-color: #17B79420; color: #17B794; padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 0.9rem; border-left: 3px solid #17B794;'>✅ {f}</div>", unsafe_allow_html=True)
+                    else:
+                        st.caption("No strong positive factors detected.")
+                with c_neg:
+                    if negative_factors:
+                        for f in negative_factors:
+                            st.markdown(f"<div style='background-color: #FF4B4B20; color: #FF4B4B; padding: 8px; border-radius: 6px; margin-bottom: 5px; font-size: 0.9rem; border-left: 3px solid #FF4B4B;'>⚠️ {f}</div>", unsafe_allow_html=True)
+                    else:
+                        st.caption("No negative factors detected.")
 
-            if confidence < 0.6:
-                confidence_label = "⚠️ LOW CONFIDENCE"
-                confidence_color = "#FFA500"
-                confidence_desc = "The AI is unsure. Consider this a 'maybe' - gather more context."
-            elif confidence < 0.75:
-                confidence_label = "📊 MODERATE CONFIDENCE"  
-                confidence_color = "#EEB76B"
-                confidence_desc = "The AI sees some signals but it's not definitive."
-            elif confidence < 0.85:
-                confidence_label = "✅ GOOD CONFIDENCE"
-                confidence_color = "#17B794"
-                confidence_desc = "The AI has identified clear risk/stability factors."
+                # --- ACTIONABLE RETENTION ---
+                if risk_percentage >= 40:
+                    st.markdown("---"); st.markdown("### 💡 Recommended Actions")
+                    for rec in get_retention_strategies(pd.DataFrame([input_data])): 
+                        st.info(rec)
+                    
+                    # Tucked DiCE Counterfactuals into an expander to keep UI clean
+                    with st.expander("🔮 Advanced: Show AI Strategies to Keep Them"):
+                        if st.button("Generate What-If Strategies", key="gen_cf_split"):
+                            with st.spinner("Simulating retention strategies..."):
+                                try:
+                                    query_instance = st.session_state.input_df
+                                    continuous_features = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
+                                    if not continuous_features: st.error("No numerical columns found for simulation.")
+                                    else:
+                                        d = dice_ml.Data(dataframe=df, continuous_features=continuous_features, outcome_name='left')
+                                        m = dice_ml.Model(model=pipeline, backend='sklearn')
+                                        exp = Dice(d, m, method='random')
+                                        cf = exp.generate_counterfactuals(query_instance, total_CFs=3, desired_class="opposite")
+                                        cf_df = cf.cf_examples_list[0].final_cfs_df
+                                        original = query_instance.iloc[0]
+                                        for i in range(len(cf_df)):
+                                            changes = []; cf_row = cf_df.iloc[i]; has_high_effort = False
+                                            for col in original.index:
+                                                orig_val = original[col]; new_val = cf_row[col]
+                                                if isinstance(orig_val, float):
+                                                    if abs(orig_val - new_val) > 0.05:
+                                                        col_lower = col.lower(); action_text = ""
+                                                        if 'satisfaction' in col_lower: action_text = f"🤝 <strong>Boost Engagement</strong>: Improve satisfaction score from <strong>{orig_val:.2f}</strong> to <strong>{new_val:.2f}</strong>."
+                                                        elif 'hours' in col_lower:
+                                                            diff = orig_val - new_val
+                                                            if diff > 0: action_text = f"⏰ <strong>Reduce Workload</strong>: Cut monthly hours by ~<strong>{abs(diff):.0f}</strong>."
+                                                            else: action_text = f"⏰ <strong>Increase Engagement</strong>: Adjust hours to ~<strong>{new_val:.0f}</strong>."
+                                                        elif 'project' in col_lower: action_text = f"📂 <strong>Rebalance Projects</strong>: Adjust project count to <strong>{int(new_val)}</strong>."
+                                                        elif 'evaluation' in col_lower: action_text = f"📊 <strong>Performance Coaching</strong>: Guide evaluation score to <strong>{new_val:.2f}</strong>."
+                                                        else: action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: Change from {orig_val:.2f} to {new_val:.2f}."
+                                                        if action_text: changes.append(action_text)
+                                                else:
+                                                    if orig_val != new_val:
+                                                        if 'department' in col.lower(): has_high_effort = True; action_text = f"🏢 <strong>Department Transfer</strong>: Move from <strong>{orig_val}</strong> to <strong>{new_val}</strong>. <span style='color:#FF4B4B;'>(High Effort)</span>"
+                                                        else: action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: Change from {orig_val} to {new_val}."
+                                                        changes.append(action_text)
+                                            if not changes: changes.append("• (AI suggests maintaining current status with minor supervision)")
+                                            changes_str = "".join([f"<div class='action-item {'action-item-high-effort' if has_high_effort else ''}'>{c}</div>" for c in changes])
+                                            st.markdown(f"<div class='custom-card' style='border-color: #17B794;'><h4 style='color: #17B794; margin-top:0;'>Strategy {i+1}</h4><p style='color: #c9d1d9; font-size: 0.9rem; line-height: 1.6;'>{changes_str}</p></div>", unsafe_allow_html=True)
+                                except Exception as e: st.error(f"Error generating strategies: {e}")
             else:
-                confidence_label = "🎯 HIGH CONFIDENCE"
-                confidence_color = "#17B794"
-                confidence_desc = "The AI is very confident in this assessment."
-
-            st.markdown(f"""
-            <div class="custom-card" style="border-left: 4px solid {confidence_color};">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                # Empty State
+                st.markdown("""
+                <div style='height: 400px; display: flex; align-items: center; justify-content: center; border: 2px dashed #30363d; border-radius: 16px; text-align: center; padding: 20px;'>
                     <div>
-                        <h4 style="margin: 0; color: {confidence_color};">{confidence_label}</h4>
-                        <p style="margin: 5px 0 0 0; color: #8b949e; font-size: 0.85rem;">{confidence_desc}</p>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="font-size: 2rem; font-weight: 700; color: {confidence_color};">{confidence:.0%}</div>
-                        <small style="color: #8b949e;">AI Confidence</small>
+                        <h2 style='color: #8b949e; font-size: 1.5rem; margin-bottom: 10px;'>Waiting for Input</h2>
+                        <p style='color: #555d6b;'>Adjust the sliders on the left and click<br><strong>'Analyze Profile'</strong> to see the risk assessment.</p>
                     </div>
                 </div>
-                
-                <div style="margin-top: 15px; background: #21262d; border-radius: 10px; overflow: hidden; height: 30px; display: flex;">
-                    <div style="width: {stay_prob*100}%; background: linear-gradient(90deg, #17B794, #11998e); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.8rem;">
-                        Stay {stay_prob:.0%}
-                    </div>
-                    <div style="width: {leave_prob*100}%; background: linear-gradient(90deg, #FF4B4B, #cc3a3a); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.8rem;">
-                        Leave {leave_prob:.0%}
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.session_state.prediction_result == 1:
-                st.markdown("---"); st.markdown("### 💡 Recommended Actions")
-                for rec in get_retention_strategies(st.session_state.input_df): st.info(rec)
-                st.markdown("---"); st.markdown("### 🔮 AI Retention Strategies (What-If Simulator)")
-                st.write("<p style='color: #9ca3af; margin-bottom: 15px;'>Here are 3 different ways to prevent this employee from leaving, ranked by feasibility.</p>", unsafe_allow_html=True)
-                if st.button("💡 Show Me How to Keep Them", type="primary", key="gen_cf"):
-                    with st.spinner("Simulating retention strategies..."):
-                        try:
-                            query_instance = st.session_state.input_df
-                            continuous_features = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
-                            if not continuous_features: st.error("No numerical columns found for simulation.")
-                            else:
-                                d = dice_ml.Data(dataframe=df, continuous_features=continuous_features, outcome_name='left')
-                                m = dice_ml.Model(model=pipeline, backend='sklearn')
-                                exp = Dice(d, m, method='random')
-                                cf = exp.generate_counterfactuals(query_instance, total_CFs=3, desired_class="opposite")
-                                cf_df = cf.cf_examples_list[0].final_cfs_df
-                                original = query_instance.iloc[0]
-                                scenarios_html = []
-                                for i in range(len(cf_df)):
-                                    changes = []; cf_row = cf_df.iloc[i]; has_high_effort = False
-                                    for col in original.index:
-                                        orig_val = original[col]; new_val = cf_row[col]
-                                        if isinstance(orig_val, float):
-                                            if abs(orig_val - new_val) > 0.05:
-                                                col_lower = col.lower(); action_text = ""
-                                                if 'satisfaction' in col_lower: action_text = f"🤝 <strong>Boost Engagement</strong>: Improve satisfaction score from <strong>{orig_val:.2f}</strong> to <strong>{new_val:.2f}</strong>."
-                                                elif 'hours' in col_lower:
-                                                    diff = orig_val - new_val
-                                                    if diff > 0: action_text = f"⏰ <strong>Reduce Workload</strong>: Cut monthly hours by ~<strong>{abs(diff):.0f}</strong>."
-                                                    else: action_text = f"⏰ <strong>Increase Engagement</strong>: Adjust hours to ~<strong>{new_val:.0f}</strong>."
-                                                elif 'project' in col_lower: action_text = f"📂 <strong>Rebalance Projects</strong>: Adjust project count to <strong>{int(new_val)}</strong>."
-                                                elif 'evaluation' in col_lower: action_text = f"📊 <strong>Performance Coaching</strong>: Guide evaluation score to <strong>{new_val:.2f}</strong>."
-                                                else: action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: Change from {orig_val:.2f} to {new_val:.2f}."
-                                                if action_text: changes.append(action_text)
-                                        else:
-                                            if orig_val != new_val:
-                                                if 'department' in col.lower(): has_high_effort = True; action_text = f"🏢 <strong>Department Transfer</strong>: Move from <strong>{orig_val}</strong> to <strong>{new_val}</strong>. <span style='color:#FF4B4B;'>(High Effort)</span>"
-                                                else: action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: Change from {orig_val} to {new_val}."
-                                                changes.append(action_text)
-                                    if not changes: changes.append("• (AI suggests maintaining current status with minor supervision)")
-                                    changes_str = "".join([f"<div class='action-item {'action-item-high-effort' if has_high_effort else ''}'>{c}</div>" for c in changes])
-                                    scenarios_html.append(f"<div class='custom-card' style='border-color: #17B794;'><h4 style='color: #17B794; margin-top:0;'>Strategy {i+1}</h4><p style='color: #c9d1d9; font-size: 0.9rem; line-height: 1.6;'>{changes_str}</p><div style='margin-top: 15px; border-top: 1px solid #30363d; padding-top: 10px;'><small style='color: #17B794;'><strong>Result:</strong> If implemented, the AI predicts the employee will <strong>STAY</strong>.</small></div></div>")
-                                col_s1, col_s2, col_s3 = st.columns(3)
-                                cols_list = [col_s1, col_s2, col_s3]
-                                for i, html in enumerate(scenarios_html):
-                                    with cols_list[i]: st.markdown(html, unsafe_allow_html=True)
-                        except Exception as e: st.error(f"Error generating strategies: {e}")
+                """, unsafe_allow_html=True)
 
     if page == "Why They Leave":
         st.header("🧠 Key Attrition Drivers")
