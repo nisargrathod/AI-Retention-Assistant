@@ -19,7 +19,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import warnings
 from time import sleep
 from scipy.sparse import issparse
-from scipy.special import expit, logit  # 🔧 CRITICAL: For probability calibration
+from scipy.special import expit, logit
 
 # --- Imports for Evaluation 1 (Logic Engine) ---
 import dowhy
@@ -42,15 +42,13 @@ from dice_ml import Dice
 # ====================================================================
 st.markdown("""
 <style>
-    /* --- Font & General --- */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
     .stApp {
         background-color: #0E1117;
         font-family: 'Inter', sans-serif;
     }
     
-    /* --- Sidebar Styling --- */
     [data-testid="stSidebar"] {
         background-color: #161b22;
         border-right: 1px solid #30363d;
@@ -61,7 +59,6 @@ st.markdown("""
         padding-right: 20px;
     }
 
-    /* --- Main Content Styling --- */
     .main {
         padding-top: 2rem;
         padding-bottom: 2rem;
@@ -76,7 +73,6 @@ st.markdown("""
         color: #ffffff;
     }
 
-    /* --- Metric Cards --- */
     [data-testid="stMetricValue"] {
         font-size: 2.5rem;
         font-weight: 700;
@@ -87,7 +83,6 @@ st.markdown("""
         color: #9ca3af;
     }
 
-    /* --- Custom Card Container --- */
     .custom-card {
         background-color: #1c2128;
         border: 1px solid #30363d;
@@ -98,7 +93,6 @@ st.markdown("""
         color: #c9d1d9;
     }
 
-    /* --- Button Styling --- */
     div[data-testid="stFormSubmitButton"] > button {
         width: 100%;
         background: linear-gradient(90deg, #17B794 0%, #11998e 100%);
@@ -115,7 +109,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(23, 183, 148, 0.4);
     }
 
-    /* --- Dataframe Styling --- */
     .dataframe {
         border-radius: 8px;
         overflow: hidden;
@@ -126,7 +119,6 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* --- Expander Styling --- */
     .streamlit-expanderHeader {
         background-color: #21262d;
         border-radius: 8px;
@@ -134,7 +126,6 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* --- LLM Output --- */
     .llm-response {
         background-color: #21262d;
         border-left: 4px solid #17B794;
@@ -146,7 +137,6 @@ st.markdown("""
         white-space: pre-wrap;
     }
 
-    /* --- HR Friendly Action Item Styling --- */
     .action-item {
         background-color: #161b22;
         padding: 8px;
@@ -156,64 +146,139 @@ st.markdown("""
         font-size: 0.9rem;
     }
     .action-item-high-effort {
-        border-left: 3px solid #FF4B4B; /* Red for high effort */
+        border-left: 3px solid #EEB76B;
     }
     
-    /* --- Probability Bar Styling --- */
-    .prob-bar-container {
-        width: 100%;
-        background-color: #21262d;
-        border-radius: 10px;
-        overflow: hidden;
-        height: 35px;
-        margin-top: 10px;
+    /* --- Interactive Prediction Card --- */
+    .prediction-card {
         display: flex;
-    }
-    .prob-bar-stay {
-        height: 100%;
-        background: linear-gradient(90deg, #17B794, #11998e);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 600;
-        font-size: 14px;
-    }
-    .prob-bar-leave {
-        height: 100%;
-        background: linear-gradient(90deg, #EEB76B, #cc8f4a);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 600;
-        font-size: 14px;
-    }
-    
-    /* --- Simple Result Card --- */
-    .simple-result-card {
         background-color: #1c2128;
+        border-radius: 16px;
+        overflow: hidden;
         border: 1px solid #30363d;
-        border-radius: 12px;
-        padding: 25px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        transition: all 0.3s ease;
+    }
+    .prediction-card:hover {
+        box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+        transform: translateY(-2px);
+    }
+    
+    .card-section {
+        flex: 1;
+        padding: 30px 25px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
         text-align: center;
+        position: relative;
     }
-    .result-label {
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 10px;
+    
+    .card-section:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 20%;
+        height: 60%;
+        width: 1px;
+        background: linear-gradient(to bottom, transparent, #30363d, transparent);
     }
-    .result-stay {
-        color: #17B794;
+    
+    .card-label {
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 12px;
     }
+    
+    .card-result {
+        font-size: 2.2rem;
+        font-weight: 800;
+        letter-spacing: 2px;
+    }
+    
     .result-leave {
         color: #EEB76B;
+        text-shadow: 0 0 20px rgba(238, 183, 107, 0.3);
+    }
+    
+    .result-stay {
+        color: #17B794;
+        text-shadow: 0 0 20px rgba(23, 183, 148, 0.3);
+    }
+    
+    .card-percentage {
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin-top: 8px;
+    }
+    
+    .percentage-stay {
+        color: #17B794;
+    }
+    
+    .percentage-leave {
+        color: #EEB76B;
+    }
+    
+    .card-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-top: 12px;
+    }
+    
+    .indicator-stay {
+        background-color: #17B794;
+        box-shadow: 0 0 10px rgba(23, 183, 148, 0.5);
+    }
+    
+    .indicator-leave {
+        background-color: #EEB76B;
+        box-shadow: 0 0 10px rgba(238, 183, 107, 0.5);
+    }
+    
+    /* First section special styling */
+    .card-section-first {
+        background: linear-gradient(135deg, #1c2128 0%, #21262d 100%);
+    }
+    
+    /* Highlight section based on result */
+    .highlight-leave .card-section-first {
+        background: linear-gradient(135deg, #2d2515 0%, #1c2128 100%);
+    }
+    
+    .highlight-stay .card-section-first {
+        background: linear-gradient(135deg, #0d2818 0%, #1c2128 100%);
+    }
+    
+    @media (max-width: 768px) {
+        .prediction-card {
+            flex-direction: column;
+        }
+        .card-section:not(:last-child)::after {
+            right: 20%;
+            top: auto;
+            bottom: 0;
+            height: 1px;
+            width: 60%;
+            background: linear-gradient(to right, transparent, #30363d, transparent);
+        }
+        .card-result {
+            font-size: 1.8rem;
+        }
+        .card-percentage {
+            font-size: 1.5rem;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ====================================================================
-# 🔧 CRITICAL FIX: TEMPERATURE SCALING FUNCTION
+# TEMPERATURE SCALING FUNCTION
 # ====================================================================
 def calibrate_probability(prob, temperature=0.55):
     prob = np.clip(prob, 1e-7, 1 - 1e-7)
@@ -333,7 +398,7 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
             tabs[i].plotly_chart(figs[i], use_container_width=True)
 
 # ====================================================================
-# Logic Engine Functions (Evaluation 1) - GLOBAL SAFEGUARDS ADDED
+# Logic Engine Functions
 # ====================================================================
 
 def analyze_why_people_leave(df):
@@ -402,7 +467,6 @@ def plan_retention_budget(df, pipeline, budget_limit):
     st.markdown("<p style='color: #9ca3af;'>Optimize your spend to save on replacement costs.</p>", unsafe_allow_html=True)
     X = df.drop('left', axis=1)
     
-    # 🔧 FIX: Calibrate probabilities used for budget planning
     raw_probs = pipeline.predict_proba(X)[:, 1]
     probas = calibrate_probability_array(raw_probs, temperature=0.55)
     
@@ -561,7 +625,6 @@ def main():
             categorical_features = X.select_dtypes(include=['object']).columns
             numerical_features = X.select_dtypes(include=np.number).columns
             
-            # 🔧 FIX: Replaced StandardScaler with passthrough
             preprocessor = ColumnTransformer(
                 transformers=[
                     ('num', 'passthrough', numerical_features),
@@ -569,7 +632,6 @@ def main():
             
             st.write("🤖 Step 3/3: Training AI Model (LightGBM)...")
             
-            # 🔧 FIX: Calibrated & Regularized Model Parameters
             best_params = {
                 'n_estimators': 150, 
                 'learning_rate': 0.05, 
@@ -677,7 +739,6 @@ def main():
                         y = new_df[target_col].apply(lambda x: 1 if x == left_value else 0); X = new_df[feature_cols]
                         valid_idx = X.dropna().index; X_clean = X.loc[valid_idx]; y_clean = y.loc[valid_idx]
                         
-                        # 🔧 FIX: Global setup using passthrough
                         if len(categorical_auto) == 0: preprocessor_global = ColumnTransformer(transformers=[('num', 'passthrough', numerical_auto)])
                         else: preprocessor_global = ColumnTransformer(transformers=[('num', 'passthrough', numerical_auto), ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_auto)])
                         
@@ -685,7 +746,6 @@ def main():
                         
                         spw = min((y_train_g == 0).sum() / (y_train_g == 1).sum(), 2.0) if (y_train_g == 1).sum() > 0 else 1.0
                         
-                        # 🔧 FIX: Calibrated LightGBM for custom data
                         global_pipeline = Pipeline(steps=[('preprocessor', preprocessor_global), ('classifier', lgb.LGBMClassifier(n_estimators=150, learning_rate=0.05, num_leaves=12, max_depth=4, min_child_samples=40, reg_alpha=0.5, reg_lambda=0.5, subsample=0.8, colsample_bytree=0.8, random_state=42, verbose=-1, scale_pos_weight=spw))])
                         global_pipeline.fit(X_train_g, y_train_g)
                         y_pred_g = global_pipeline.predict(X_test_g); acc = accuracy_score(y_test_g, y_pred_g)
@@ -732,7 +792,7 @@ def main():
 
     if page == "Predict Attrition":
         st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess if they will Stay or Leave.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af;'>Enter employee details to see if they will Stay or Leave.</p>", unsafe_allow_html=True)
         
         with st.expander("🧪 Model Diagnostics (Verification)", expanded=False):
             st.write("Not sure if the AI is working? Test it against real historical data:")
@@ -744,8 +804,8 @@ def main():
                     raw_prob = pipeline.predict_proba(test_df)[0][1]
                     calibrated_prob = calibrate_probability(raw_prob)
                     pred = 1 if calibrated_prob >= 0.5 else 0
-                    if pred == 1: st.success(f"✅ **Correct!** Prediction: Leave ({calibrated_prob:.1%})")
-                    else: st.error(f"❌ **Incorrect.** Prediction: Stay ({calibrated_prob:.1%})")
+                    if pred == 1: st.success(f"✅ **Correct!** Prediction: Leave")
+                    else: st.error(f"❌ **Incorrect.** Prediction: Stay")
                     st.json(sample.to_dict(), expanded=False)
             with c_test2:
                 if st.button("Test with Employee who Stayed"):
@@ -754,8 +814,8 @@ def main():
                     raw_prob = pipeline.predict_proba(test_df)[0][1]
                     calibrated_prob = calibrate_probability(raw_prob)
                     pred = 1 if calibrated_prob >= 0.5 else 0
-                    if pred == 0: st.success(f"✅ **Correct!** Prediction: Stay ({1-calibrated_prob:.1%})")
-                    else: st.error(f"❌ **Incorrect.** Prediction: Leave ({calibrated_prob:.1%})")
+                    if pred == 0: st.success(f"✅ **Correct!** Prediction: Stay")
+                    else: st.error(f"❌ **Incorrect.** Prediction: Leave")
                     st.json(sample.to_dict(), expanded=False)
 
         st.markdown("---")
@@ -794,7 +854,6 @@ def main():
                             if df[col].nunique() > 50: input_data[col] = st.number_input(col.replace('_', ' ').title(), value=float(df[col].mean()), min_value=min_val, max_value=max_val)
                             else: input_data[col] = st.slider(col.replace('_', ' ').title(), min_value=min_val, max_value=max_val, value=float(df[col].mean()))
 
-            # ✅ SINGLE BUTTON ONLY
             predict_button = st.form_submit_button(label='🔮 Analyze Employee', type='primary')
 
         if 'prediction_result' not in st.session_state:
@@ -807,7 +866,6 @@ def main():
             with st.spinner('AI is analyzing...'):
                 sleep(1)
                 input_df = input_df[feature_columns] 
-                # 🔧 FIX: Apply Temperature Scaling
                 raw_probas = pipeline.predict_proba(input_df)[0]
                 calibrated_stay = calibrate_probability(raw_probas[0], temperature=0.55)
                 calibrated_leave = 1 - calibrated_stay
@@ -820,38 +878,41 @@ def main():
         if st.session_state.prediction_result is not None:
             st.markdown("---")
             
-            # 🔧 SIMPLIFIED RESULT DISPLAY - Just "Stay" or "Leave"
             stay_prob = st.session_state.prediction_probas[0]
             leave_prob = st.session_state.prediction_probas[1]
             
-            if st.session_state.prediction_result == 0:
-                pred_label = "Stay"
-                pred_icon = "✅"
-                pred_class = "result-stay"
+            # ✅ INTERACTIVE 3-COLUMN CARD
+            if st.session_state.prediction_result == 1:
+                result_text = "LEAVE"
+                result_class = "result-leave"
+                highlight_class = "highlight-leave"
+                stay_indicator = "indicator-leave"
+                leave_indicator = "indicator-leave"
             else:
-                pred_label = "Leave"
-                pred_icon = "🔄"
-                pred_class = "result-leave"
+                result_text = "STAY"
+                result_class = "result-stay"
+                highlight_class = "highlight-stay"
+                stay_indicator = "indicator-stay"
+                leave_indicator = "indicator-stay"
             
             st.markdown(f"""
-            <div class="simple-result-card">
-                <div class="result-label {pred_class}">{pred_icon} {pred_label}</div>
-                
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; margin-top: 20px; font-weight: 600; font-size: 0.9rem;">
-                    <span style="color: #17B794;">Stay: {stay_prob:.1%}</span>
-                    <span style="color: #EEB76B;">Leave: {leave_prob:.1%}</span>
+            <div class="prediction-card {highlight_class}">
+                <div class="card-section card-section-first">
+                    <div class="card-label">Employee is Likely to</div>
+                    <div class="card-result {result_class}">{result_text}</div>
                 </div>
-                
-                <div class="prob-bar-container">
-                    <div class="prob-bar-stay" style="width: {stay_prob*100:.1f}%; font-size: {12 if stay_prob < 0.2 else 14}px;">{stay_prob:.1%}</div>
-                    <div class="prob-bar-leave" style="width: {leave_prob*100:.1f}%; font-size: {12 if leave_prob < 0.2 else 14}px;">{leave_prob:.1%}</div>
+                <div class="card-section">
+                    <div class="card-label">Probability to Stay</div>
+                    <div class="card-percentage percentage-stay">{stay_prob:.2f}%</div>
+                    <div class="card-indicator {stay_indicator}"></div>
+                </div>
+                <div class="card-section">
+                    <div class="card-label">Probability to Leave</div>
+                    <div class="card-percentage percentage-leave">{leave_prob:.2f}%</div>
+                    <div class="card-indicator {leave_indicator}"></div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
-            col_stay, col_leave = st.columns(2)
-            with col_stay: st.metric("Stay Probability", f"{stay_prob:.1%}")
-            with col_leave: st.metric("Leave Probability", f"{leave_prob:.1%}")
             
             if st.session_state.prediction_result == 1:
                 st.markdown("---"); st.markdown("### 💡 Recommended Actions")
@@ -1060,7 +1121,6 @@ def main():
             st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Discover the people who defy the AI's logic.<br><br><strong>🚪 Happy Leavers:</strong> Employees the AI predicted would STAY, but LEFT.<br><strong>🛡️ Loyal Sufferers:</strong> Employees the AI predicted would LEAVE, but STAYED.</p>", unsafe_allow_html=True)
             X_all = df.drop('left', axis=1); y_true = df['left']
             
-            # 🔧 FIX: Calibrated predictions for anomalies
             raw_probs_anomaly = pipeline.predict_proba(X_all)[:, 1]
             cal_probs_anomaly = calibrate_probability_array(raw_probs_anomaly, temperature=0.55)
             y_pred = (cal_probs_anomaly >= 0.5).astype(int)
@@ -1100,7 +1160,6 @@ def main():
             st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>A strategic view to prioritize your HR efforts. <br>We map <strong>Attrition Risk</strong> against <strong>Replacement Cost</strong> to identify who needs immediate attention vs. who is safe to let go.</p>", unsafe_allow_html=True)
             X_all = df.drop('left', axis=1)
             
-            # 🔧 FIX: Calibrated probabilities for priority matrix
             raw_risk_probs = pipeline.predict_proba(X_all)[:, 1]
             risk_probs = calibrate_probability_array(raw_risk_probs, temperature=0.55)
             
@@ -1178,13 +1237,12 @@ def main():
                     else: st.warning(f"**{item['Type']}**: {item['Rule']}")
 
     # ====================================================================
-    # Page: STRATEGIC ROADMAP (FIXED MATH & SIMPLIFIED)
+    # Page: STRATEGIC ROADMAP
     # ====================================================================
     if page == "Strategic Roadmap":
         st.header("🚀 Future Planning & Projections")
         st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>A simple tool to show leadership exactly what happens if we take action vs. if we do nothing.</p>", unsafe_allow_html=True)
         
-        # --- PART 1: THE ROADMAP ---
         st.markdown("### 📋 Step 1: Get Your 6-Month Action Plan")
         avg_sat = df['satisfaction_level'].mean() if 'satisfaction_level' in df.columns else 0.5
         avg_hours = df['average_montly_hours'].mean() if 'average_montly_hours' in df.columns else 0
@@ -1224,7 +1282,6 @@ def main():
 
         st.markdown("---")
         
-        # --- PART 2: THE FUTURE FORECAST (BULLETPROOF MATH) ---
         st.markdown("### 📈 Step 2: See the Future Impact (12-Month Projection)")
         st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Adjust the sliders to match your realistic expectations. This calculates the exact headcount and money saved.</p>", unsafe_allow_html=True)
         
@@ -1237,7 +1294,6 @@ def main():
         if st.button("📈 Show Me the 12-Month Projection", type="primary"):
             months = list(range(1, 13)); current_workforce = len(df)
             
-            # 🔧 FIX: Calibrated projections for roadmap
             raw_risk_scores = pipeline.predict_proba(df.drop('left', axis=1))[:, 1]
             total_risk_score = calibrate_probability_array(raw_risk_scores, temperature=0.55).sum()
             
