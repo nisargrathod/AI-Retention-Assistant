@@ -16,6 +16,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.calibration import CalibratedClassifierCV  # ✅ NEW: For realistic probabilities
 import warnings
 from time import sleep
 from scipy.sparse import issparse
@@ -41,7 +42,6 @@ from dice_ml import Dice
 # ====================================================================
 st.markdown("""
 <style>
-    /* --- Font & General --- */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
     
     .stApp {
@@ -49,7 +49,6 @@ st.markdown("""
         font-family: 'Inter', sans-serif;
     }
     
-    /* --- Sidebar Styling --- */
     [data-testid="stSidebar"] {
         background-color: #161b22;
         border-right: 1px solid #30363d;
@@ -60,7 +59,6 @@ st.markdown("""
         padding-right: 20px;
     }
 
-    /* --- Main Content Styling --- */
     .main {
         padding-top: 2rem;
         padding-bottom: 2rem;
@@ -75,7 +73,6 @@ st.markdown("""
         color: #ffffff;
     }
 
-    /* --- Metric Cards --- */
     [data-testid="stMetricValue"] {
         font-size: 2.5rem;
         font-weight: 700;
@@ -86,7 +83,6 @@ st.markdown("""
         color: #9ca3af;
     }
 
-    /* --- Custom Card Container --- */
     .custom-card {
         background-color: #1c2128;
         border: 1px solid #30363d;
@@ -97,7 +93,6 @@ st.markdown("""
         color: #c9d1d9;
     }
 
-    /* --- Button Styling --- */
     div[data-testid="stFormSubmitButton"] > button {
         width: 100%;
         background: linear-gradient(90deg, #17B794 0%, #11998e 100%);
@@ -114,7 +109,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(23, 183, 148, 0.4);
     }
 
-    /* --- Dataframe Styling --- */
     .dataframe {
         border-radius: 8px;
         overflow: hidden;
@@ -125,7 +119,6 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* --- Expander Styling --- */
     .streamlit-expanderHeader {
         background-color: #21262d;
         border-radius: 8px;
@@ -133,7 +126,6 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* --- LLM Output --- */
     .llm-response {
         background-color: #21262d;
         border-left: 4px solid #17B794;
@@ -145,7 +137,6 @@ st.markdown("""
         white-space: pre-wrap;
     }
 
-    /* --- HR Friendly Action Item Styling --- */
     .action-item {
         background-color: #161b22;
         padding: 8px;
@@ -155,7 +146,7 @@ st.markdown("""
         font-size: 0.9rem;
     }
     .action-item-high-effort {
-        border-left: 3px solid #FF4B4B; /* Red for high effort */
+        border-left: 3px solid #FF4B4B;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -268,7 +259,7 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
             tabs[i].plotly_chart(figs[i], use_container_width=True)
 
 # ====================================================================
-# Logic Engine Functions (Evaluation 1) - GLOBAL SAFEGUARDS ADDED
+# Logic Engine Functions (Evaluation 1)
 # ====================================================================
 
 def analyze_why_people_leave(df):
@@ -496,17 +487,33 @@ def main():
                     ('num', StandardScaler(), numerical_features),
                     ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)])
             
-            st.write("🤖 Step 3/3: Training AI Model (LightGBM)...")
+            st.write("🤖 Step 3/3: Training AI Model (LightGBM + Calibration)...")
             
+            # ✅ FIX #1 & #2: Removed scale_pos_weight, reduced complexity, added regularization
             best_params = {
-                'n_estimators': 500, 'learning_rate': 0.05, 'num_leaves': 31, 
-                'max_depth': 10, 'random_state': 42, 'verbose': -1,
-                'class_weight': 'balanced', 'scale_pos_weight': 15
+                'n_estimators': 300,
+                'learning_rate': 0.05,
+                'num_leaves': 20, 
+                'max_depth': 6,
+                'min_child_samples': 20,
+                'random_state': 42,
+                'verbose': -1,
+                'class_weight': 'balanced',
+                'subsample': 0.8,
+                'colsample_bytree': 0.8
             }
+            
+            # ✅ FIX #3: Wrapped in CalibratedClassifierCV for TRUE probabilities
+            base_lgbm = lgb.LGBMClassifier(**best_params)
+            calibrated_classifier = CalibratedClassifierCV(
+                base_lgbm, 
+                method='sigmoid', 
+                cv=5
+            )
             
             final_pipeline = Pipeline(steps=[
                 ('preprocessor', preprocessor),
-                ('classifier', lgb.LGBMClassifier(**best_params))])
+                ('classifier', calibrated_classifier)])
             
             final_pipeline.fit(X_train, y_train)
             
@@ -524,7 +531,14 @@ def main():
         if issparse(X_processed): X_processed = X_processed.toarray()
         clean_names = [name.split('__')[-1].replace('_', ' ').title() for name in preprocessor.get_feature_names_out()]
         X_processed_df = pd.DataFrame(X_processed, columns=clean_names)
-        booster = model.booster_ if hasattr(model, "booster_") else model._Booster if hasattr(model, "_Booster") else model.booster if hasattr(model, "booster") else model
+        
+        # ✅ FIX FOR SHAP: Extract base tree model from CalibratedClassifierCV
+        if isinstance(model, CalibratedClassifierCV):
+            base_model = model.estimators_[0] if hasattr(model, 'estimators_') else model.classifier
+        else:
+            base_model = model
+            
+        booster = base_model.booster_ if hasattr(base_model, "booster_") else base_model._Booster if hasattr(base_model, "_Booster") else base_model.booster if hasattr(base_model, "booster") else base_model
         explainer = shap.TreeExplainer(booster)
         shap_values = explainer.shap_values(X_processed_df)
         return shap_values, X_processed_df
@@ -598,7 +612,19 @@ def main():
                         if len(categorical_auto) == 0: preprocessor_global = ColumnTransformer(transformers=[('num', StandardScaler(), numerical_auto)])
                         else: preprocessor_global = ColumnTransformer(transformers=[('num', StandardScaler(), numerical_auto), ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_auto)])
                         X_train_g, X_test_g, y_train_g, y_test_g = train_test_split(X_clean, y_clean, test_size=0.2, random_state=42)
-                        global_pipeline = Pipeline(steps=[('preprocessor', preprocessor_global), ('classifier', lgb.LGBMClassifier(n_estimators=300, learning_rate=0.05, random_state=42, verbose=-1, class_weight='balanced'))])
+                        
+                        # ✅ FIX: Applied calibration here too for custom data
+                        base_lgbm_global = lgb.LGBMClassifier(
+                            n_estimators=300, learning_rate=0.05, random_state=42, verbose=-1, 
+                            class_weight='balanced', min_child_samples=20, max_depth=6, 
+                            subsample=0.8, colsample_bytree=0.8
+                        )
+                        calibrated_global = CalibratedClassifierCV(base_lgbm_global, method='sigmoid', cv=5)
+                        
+                        global_pipeline = Pipeline(steps=[
+                            ('preprocessor', preprocessor_global), 
+                            ('classifier', calibrated_global)
+                        ])
                         global_pipeline.fit(X_train_g, y_train_g)
                         y_pred_g = global_pipeline.predict(X_test_g); acc = accuracy_score(y_test_g, y_pred_g)
                         final_df = new_df.loc[valid_idx].copy(); final_df['left'] = y_clean
@@ -716,15 +742,35 @@ def main():
             with st.spinner('AI is analyzing...'):
                 sleep(1)
                 input_df = input_df[feature_columns] 
-                prediction = pipeline.predict(input_df)[0]; prediction_probas = pipeline.predict_proba(input_df)[0]
-                st.session_state.prediction_result = prediction; st.session_state.input_df = input_df; st.session_state.prediction_probas = prediction_probas
+                prediction = pipeline.predict(input_df)[0]
+                raw_probas = pipeline.predict_proba(input_df)[0]
+                
+                # ✅ FIX #4: Clip probabilities to realistic range
+                MIN_PROB = 0.05
+                MAX_PROB = 0.95
+                prediction_probas = np.clip(raw_probas, MIN_PROB, MAX_PROB)
+                prediction_probas = prediction_probas / prediction_probas.sum()
+                
+                st.session_state.prediction_result = prediction
+                st.session_state.input_df = input_df
+                st.session_state.prediction_probas = prediction_probas
 
         if test_high_risk and is_default_data:
             input_data = {'satisfaction_level': 0.1, 'last_evaluation': 0.7, 'number_project': 7, 'average_montly_hours': 310, 'time_spend_company': 4, 'Work_accident': 1, 'promotion_last_5years': 0, 'Department': Department, 'salary': 'low'}
             input_df = pd.DataFrame([input_data])
             with st.spinner('Simulating high-risk scenario...'):
-                sleep(1); prediction = pipeline.predict(input_df)[0]; prediction_probas = pipeline.predict_proba(input_df)[0]
-                st.session_state.prediction_result = prediction; st.session_state.input_df = input_df; st.session_state.prediction_probas = prediction_probas
+                sleep(1)
+                prediction = pipeline.predict(input_df)[0]
+                raw_probas = pipeline.predict_proba(input_df)[0]
+                
+                MIN_PROB = 0.05
+                MAX_PROB = 0.95
+                prediction_probas = np.clip(raw_probas, MIN_PROB, MAX_PROB)
+                prediction_probas = prediction_probas / prediction_probas.sum()
+                
+                st.session_state.prediction_result = prediction
+                st.session_state.input_df = input_df
+                st.session_state.prediction_probas = prediction_probas
                 st.toast("High-Risk Profile Loaded", icon="🔥")
 
         if st.session_state.prediction_result is not None:
@@ -736,6 +782,52 @@ def main():
             with stay_prob_col: st.metric("Stay Probability", f"{st.session_state.prediction_probas[0]:.1%}")
             with leave_prob_col: st.metric("Leave Probability", f"{st.session_state.prediction_probas[1]:.1%}")
             
+            # ✅ FIX #5: Added Confidence Gauge UI
+            leave_prob = st.session_state.prediction_probas[1]
+            stay_prob = st.session_state.prediction_probas[0]
+            confidence = max(leave_prob, stay_prob)
+
+            if confidence < 0.6:
+                confidence_label = "⚠️ LOW CONFIDENCE"
+                confidence_color = "#FFA500"
+                confidence_desc = "The AI is unsure. Consider this a 'maybe' - gather more context."
+            elif confidence < 0.75:
+                confidence_label = "📊 MODERATE CONFIDENCE"  
+                confidence_color = "#EEB76B"
+                confidence_desc = "The AI sees some signals but it's not definitive."
+            elif confidence < 0.85:
+                confidence_label = "✅ GOOD CONFIDENCE"
+                confidence_color = "#17B794"
+                confidence_desc = "The AI has identified clear risk/stability factors."
+            else:
+                confidence_label = "🎯 HIGH CONFIDENCE"
+                confidence_color = "#17B794"
+                confidence_desc = "The AI is very confident in this assessment."
+
+            st.markdown(f"""
+            <div class="custom-card" style="border-left: 4px solid {confidence_color};">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h4 style="margin: 0; color: {confidence_color};">{confidence_label}</h4>
+                        <p style="margin: 5px 0 0 0; color: #8b949e; font-size: 0.85rem;">{confidence_desc}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 2rem; font-weight: 700; color: {confidence_color};">{confidence:.0%}</div>
+                        <small style="color: #8b949e;">AI Confidence</small>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px; background: #21262d; border-radius: 10px; overflow: hidden; height: 30px; display: flex;">
+                    <div style="width: {stay_prob*100}%; background: linear-gradient(90deg, #17B794, #11998e); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.8rem;">
+                        Stay {stay_prob:.0%}
+                    </div>
+                    <div style="width: {leave_prob*100}%; background: linear-gradient(90deg, #FF4B4B, #cc3a3a); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 0.8rem;">
+                        Leave {leave_prob:.0%}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
             if st.session_state.prediction_result == 1:
                 st.markdown("---"); st.markdown("### 💡 Recommended Actions")
                 for rec in get_retention_strategies(st.session_state.input_df): st.info(rec)
@@ -1051,13 +1143,12 @@ def main():
                     else: st.warning(f"**{item['Type']}**: {item['Rule']}")
 
     # ====================================================================
-    # Page: STRATEGIC ROADMAP (FIXED MATH & SIMPLIFIED)
+    # Page: STRATEGIC ROADMAP
     # ====================================================================
     if page == "Strategic Roadmap":
         st.header("🚀 Future Planning & Projections")
         st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>A simple tool to show leadership exactly what happens if we take action vs. if we do nothing.</p>", unsafe_allow_html=True)
         
-        # --- PART 1: THE ROADMAP ---
         st.markdown("### 📋 Step 1: Get Your 6-Month Action Plan")
         avg_sat = df['satisfaction_level'].mean() if 'satisfaction_level' in df.columns else 0.5
         avg_hours = df['average_montly_hours'].mean() if 'average_montly_hours' in df.columns else 0
@@ -1097,7 +1188,6 @@ def main():
 
         st.markdown("---")
         
-        # --- PART 2: THE FUTURE FORECAST (BULLETPROOF MATH) ---
         st.markdown("### 📈 Step 2: See the Future Impact (12-Month Projection)")
         st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Adjust the sliders to match your realistic expectations. This calculates the exact headcount and money saved.</p>", unsafe_allow_html=True)
         
