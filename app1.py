@@ -211,7 +211,7 @@ st.markdown("""
     }
     
     .card-percentage {
-        font-size: 1.8rem;
+        font-size: 2rem;
         font-weight: 700;
         margin-top: 8px;
     }
@@ -881,7 +881,10 @@ def main():
             stay_prob = st.session_state.prediction_probas[0]
             leave_prob = st.session_state.prediction_probas[1]
             
-            # ✅ INTERACTIVE 3-COLUMN CARD
+            # ✅ Convert to whole percentages (no decimal points)
+            stay_percent = int(round(stay_prob * 100))
+            leave_percent = int(round(leave_prob * 100))
+            
             if st.session_state.prediction_result == 1:
                 result_text = "LEAVE"
                 result_class = "result-leave"
@@ -903,12 +906,12 @@ def main():
                 </div>
                 <div class="card-section">
                     <div class="card-label">Probability to Stay</div>
-                    <div class="card-percentage percentage-stay">{stay_prob:.2f}%</div>
+                    <div class="card-percentage percentage-stay">{stay_percent}%</div>
                     <div class="card-indicator {stay_indicator}"></div>
                 </div>
                 <div class="card-section">
                     <div class="card-label">Probability to Leave</div>
-                    <div class="card-percentage percentage-leave">{leave_prob:.2f}%</div>
+                    <div class="card-percentage percentage-leave">{leave_percent}%</div>
                     <div class="card-indicator {leave_indicator}"></div>
                 </div>
             </div>
