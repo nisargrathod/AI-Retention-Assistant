@@ -181,13 +181,33 @@ st.markdown("""
     }
     .prob-bar-leave {
         height: 100%;
-        background: linear-gradient(90deg, #FF4B4B, #cc3a3a);
+        background: linear-gradient(90deg, #EEB76B, #cc8f4a);
         display: flex;
         align-items: center;
         justify-content: center;
         color: white;
         font-weight: 600;
         font-size: 14px;
+    }
+    
+    /* --- Simple Result Card --- */
+    .simple-result-card {
+        background-color: #1c2128;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 25px;
+        text-align: center;
+    }
+    .result-label {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+    .result-stay {
+        color: #17B794;
+    }
+    .result-leave {
+        color: #EEB76B;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -712,7 +732,7 @@ def main():
 
     if page == "Predict Attrition":
         st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess risk and get retention strategies.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af;'>Enter employee details to assess if they will Stay or Leave.</p>", unsafe_allow_html=True)
         
         with st.expander("🧪 Model Diagnostics (Verification)", expanded=False):
             st.write("Not sure if the AI is working? Test it against real historical data:")
@@ -724,8 +744,8 @@ def main():
                     raw_prob = pipeline.predict_proba(test_df)[0][1]
                     calibrated_prob = calibrate_probability(raw_prob)
                     pred = 1 if calibrated_prob >= 0.5 else 0
-                    if pred == 1: st.success(f"✅ **Correct!** Calibrated risk: {calibrated_prob:.1%}")
-                    else: st.error(f"❌ **Incorrect.** Calibrated risk: {calibrated_prob:.1%}")
+                    if pred == 1: st.success(f"✅ **Correct!** Prediction: Leave ({calibrated_prob:.1%})")
+                    else: st.error(f"❌ **Incorrect.** Prediction: Stay ({calibrated_prob:.1%})")
                     st.json(sample.to_dict(), expanded=False)
             with c_test2:
                 if st.button("Test with Employee who Stayed"):
@@ -734,8 +754,8 @@ def main():
                     raw_prob = pipeline.predict_proba(test_df)[0][1]
                     calibrated_prob = calibrate_probability(raw_prob)
                     pred = 1 if calibrated_prob >= 0.5 else 0
-                    if pred == 0: st.success(f"✅ **Correct!** Calibrated risk: {calibrated_prob:.1%}")
-                    else: st.error(f"❌ **Incorrect.** Calibrated risk: {calibrated_prob:.1%}")
+                    if pred == 0: st.success(f"✅ **Correct!** Prediction: Stay ({1-calibrated_prob:.1%})")
+                    else: st.error(f"❌ **Incorrect.** Prediction: Leave ({calibrated_prob:.1%})")
                     st.json(sample.to_dict(), expanded=False)
 
         st.markdown("---")
@@ -774,9 +794,8 @@ def main():
                             if df[col].nunique() > 50: input_data[col] = st.number_input(col.replace('_', ' ').title(), value=float(df[col].mean()), min_value=min_val, max_value=max_val)
                             else: input_data[col] = st.slider(col.replace('_', ' ').title(), min_value=min_val, max_value=max_val, value=float(df[col].mean()))
 
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1: predict_button = st.form_submit_button(label='🔮 Analyze Employee', type='primary')
-            with col_btn2: test_high_risk = st.form_submit_button(label='🔥 Simulate High-Risk Employee', type='secondary')
+            # ✅ SINGLE BUTTON ONLY
+            predict_button = st.form_submit_button(label='🔮 Analyze Employee', type='primary')
 
         if 'prediction_result' not in st.session_state:
             st.session_state.prediction_result = None
@@ -798,51 +817,29 @@ def main():
                 st.session_state.input_df = input_df
                 st.session_state.prediction_probas = [calibrated_stay, calibrated_leave]
 
-        if test_high_risk and is_default_data:
-            input_data = {'satisfaction_level': 0.1, 'last_evaluation': 0.7, 'number_project': 7, 'average_montly_hours': 310, 'time_spend_company': 4, 'Work_accident': 1, 'promotion_last_5years': 0, 'Department': Department, 'salary': 'low'}
-            input_df = pd.DataFrame([input_data])
-            with st.spinner('Simulating high-risk scenario...'):
-                sleep(1)
-                # 🔧 FIX: Apply Temperature Scaling
-                raw_probas = pipeline.predict_proba(input_df)[0]
-                calibrated_stay = calibrate_probability(raw_probas[0], temperature=0.55)
-                calibrated_leave = 1 - calibrated_stay
-                prediction = 1 if calibrated_leave >= 0.5 else 0
-                
-                st.session_state.prediction_result = prediction
-                st.session_state.input_df = input_df
-                st.session_state.prediction_probas = [calibrated_stay, calibrated_leave]
-                st.toast("High-Risk Profile Loaded", icon="🔥")
-
         if st.session_state.prediction_result is not None:
             st.markdown("---")
             
-            # 🔧 FIX: Calibrated Visual Probability Bars
+            # 🔧 SIMPLIFIED RESULT DISPLAY - Just "Stay" or "Leave"
             stay_prob = st.session_state.prediction_probas[0]
             leave_prob = st.session_state.prediction_probas[1]
             
             if st.session_state.prediction_result == 0:
-                pred_label = "✅ LIKELY TO STAY"
-                pred_color = "#17B794"
-                pred_bg = "linear-gradient(135deg, #1c2128 0%, #0d2818 100%)"
+                pred_label = "Stay"
+                pred_icon = "✅"
+                pred_class = "result-stay"
             else:
-                pred_label = "🚨 AT RISK OF LEAVING"
-                pred_color = "#FF4B4B"
-                pred_bg = "linear-gradient(135deg, #1c2128 0%, #2d1515 100%)"
-            
-            if 0.6 <= leave_prob <= 0.75: confidence_text = "📊 Moderate Risk"; confidence_color = "#FFA500"
-            elif 0.75 < leave_prob <= 0.85: confidence_text = "⚠️ High Risk"; confidence_color = "#FF6B6B"
-            elif leave_prob > 0.85: confidence_text = "🔴 Critical Risk"; confidence_color = "#FF4B4B"
-            else: confidence_text = "✅ Low Risk"; confidence_color = "#17B794"
+                pred_label = "Leave"
+                pred_icon = "🔄"
+                pred_class = "result-leave"
             
             st.markdown(f"""
-            <div class="custom-card" style="text-align: center; border: 2px solid {pred_color}; background: {pred_bg};">
-                <h2 style="color: {pred_color}; margin-bottom: 5px;">{pred_label}</h2>
-                <p style="color: {confidence_color}; font-size: 1.1rem; margin-bottom: 15px;">{confidence_text}</p>
+            <div class="simple-result-card">
+                <div class="result-label {pred_class}">{pred_icon} {pred_label}</div>
                 
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: 600;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; margin-top: 20px; font-weight: 600; font-size: 0.9rem;">
                     <span style="color: #17B794;">Stay: {stay_prob:.1%}</span>
-                    <span style="color: #FF4B4B;">Leave: {leave_prob:.1%}</span>
+                    <span style="color: #EEB76B;">Leave: {leave_prob:.1%}</span>
                 </div>
                 
                 <div class="prob-bar-container">
@@ -854,7 +851,7 @@ def main():
             
             col_stay, col_leave = st.columns(2)
             with col_stay: st.metric("Stay Probability", f"{stay_prob:.1%}")
-            with col_leave: st.metric("Leave Probability", f"{leave_prob:.1%}", delta="Risk Level", delta_color="inverse" if leave_prob > 0.5 else "normal")
+            with col_leave: st.metric("Leave Probability", f"{leave_prob:.1%}")
             
             if st.session_state.prediction_result == 1:
                 st.markdown("---"); st.markdown("### 💡 Recommended Actions")
@@ -893,7 +890,7 @@ def main():
                                                 if action_text: changes.append(action_text)
                                         else:
                                             if orig_val != new_val:
-                                                if 'department' in col.lower(): has_high_effort = True; action_text = f"🏢 <strong>Department Transfer</strong>: Move from <strong>{orig_val}</strong> to <strong>{new_val}</strong>. <span style='color:#FF4B4B;'>(High Effort)</span>"
+                                                if 'department' in col.lower(): has_high_effort = True; action_text = f"🏢 <strong>Department Transfer</strong>: Move from <strong>{orig_val}</strong> to <strong>{new_val}</strong>. <span style='color:#EEB76B;'>(High Effort)</span>"
                                                 else: action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: Change from {orig_val} to {new_val}."
                                                 changes.append(action_text)
                                     if not changes: changes.append("• (AI suggests maintaining current status with minor supervision)")
@@ -989,7 +986,7 @@ def main():
 
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
-        st.markdown("<p style='color: #9ca3af;'>Advanced modules for Strategy, Anomalies, and Recruitment.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Advanced modules for Strategy, Anomalies, and Recruitment.</p>", unsafe_allow_html=True)
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Model Benchmarking", "🔬 Departmental Strategy Deep Dive", "🕵️ Anomaly Detection", "📊 Retention Priority Matrix", "🎯 The 'Ideal Candidate' Profiler"])
         
         with tab1:
@@ -1204,7 +1201,7 @@ def main():
             <h4 style="color: #17B794; margin-top: 0;">🩺 AI Diagnostic Summary</h4>
             <p style="color: #c9d1d9; line-height: 1.6;">
                 Before making a plan, here is what the AI flagged as your biggest risks:<br>
-                <strong style="color: #FF4B4B;">➤ {issues_str}</strong>
+                <strong style="color: #EEB76B;">➤ {issues_str}</strong>
             </p>
             <small style="color: #8b949e;">Click the button below to generate a custom 6-month HR strategy to fix these exact issues.</small>
         </div>
@@ -1253,7 +1250,7 @@ def main():
                 temp_bau = max(0, temp_bau - total_leavers_bau); temp_int = max(0, temp_int - total_leavers_int)
                 forecast_bau.append(temp_bau); forecast_intervention.append(temp_int)
             forecast_df = pd.DataFrame({'Month': months, 'If We Do Nothing (Status Quo)': forecast_bau, 'If We Follow the Plan': forecast_intervention}).melt(id_vars='Month', var_name='Scenario', value_name='Workforce Count')
-            fig_forecast = px.line(forecast_df, x='Month', y='Workforce Count', color='Scenario', title="Projected Workforce Size Over the Next 12 Months", template="plotly_dark", markers=True, color_discrete_map={'If We Do Nothing (Status Quo)': "#FF4B4B", 'If We Follow the Plan': "#17B794"})
+            fig_forecast = px.line(forecast_df, x='Month', y='Workforce Count', color='Scenario', title="Projected Workforce Size Over the Next 12 Months", template="plotly_dark", markers=True, color_discrete_map={'If We Do Nothing (Status Quo)': "#EEB76B", 'If We Follow the Plan': "#17B794"})
             fig_forecast.update_layout(yaxis_title="Total Employee Headcount", xaxis=dict(dtick=1)); st.plotly_chart(fig_forecast, use_container_width=True)
             saved_employees = forecast_intervention[-1] - forecast_bau[-1]
             
