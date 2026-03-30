@@ -16,7 +16,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-from sklearn.calibration import CalibratedClassifierCV  # ✅ NEW: For realistic probabilities
+from sklearn.calibration import CalibratedClassifierCV  # ✅ NEW IMPORT FOR FIX
 import warnings
 from time import sleep
 from scipy.sparse import issparse
@@ -261,7 +261,6 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
 # ====================================================================
 # Logic Engine Functions (Evaluation 1)
 # ====================================================================
-
 def analyze_why_people_leave(df):
     st.markdown("### 🔍 Why do people leave?")
     st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Our AI has analyzed the data to find the root causes of attrition.</p>", unsafe_allow_html=True)
@@ -378,7 +377,6 @@ def plan_retention_budget(df, pipeline, budget_limit):
 # ====================================================================
 # Evaluation 2: Intelligent Interface Functions
 # ====================================================================
-
 def run_groq_consultant(employee_name, department, situation, solution, budget):
     st.subheader("✍️ AI Communication Assistant")
     st.write("Describe the situation, and our AI will draft a professional response for you.")
@@ -489,21 +487,21 @@ def main():
             
             st.write("🤖 Step 3/3: Training AI Model (LightGBM + Calibration)...")
             
-            # ✅ FIX #1 & #2: Removed scale_pos_weight, reduced complexity, added regularization
+            # ✅ FIX #1: REMOVED scale_pos_weight, balanced parameters, added regularization
             best_params = {
-                'n_estimators': 300,
-                'learning_rate': 0.05,
+                'n_estimators': 300, 
+                'learning_rate': 0.05, 
                 'num_leaves': 20, 
-                'max_depth': 6,
+                'max_depth': 6, 
                 'min_child_samples': 20,
-                'random_state': 42,
+                'random_state': 42, 
                 'verbose': -1,
                 'class_weight': 'balanced',
                 'subsample': 0.8,
                 'colsample_bytree': 0.8
             }
             
-            # ✅ FIX #3: Wrapped in CalibratedClassifierCV for TRUE probabilities
+            # ✅ FIX #2: Wrapped in CalibratedClassifierCV for TRUE probabilities
             base_lgbm = lgb.LGBMClassifier(**best_params)
             calibrated_classifier = CalibratedClassifierCV(
                 base_lgbm, 
@@ -525,6 +523,15 @@ def main():
     @st.cache_data
     def get_shap_explanations(_pipeline, _df):
         model = _pipeline.named_steps['classifier']
+        
+        # ✅ FIX #3: Extract base LightGBM model from inside CalibratedClassifierCV for SHAP
+        if hasattr(model, 'classifiers_'):
+            base_model = model.classifiers_[0]
+        elif hasattr(model, 'estimator'):
+            base_model = model.estimator
+        else:
+            base_model = model
+            
         preprocessor = _pipeline.named_steps['preprocessor']
         X = _df.drop('left', axis=1).drop_duplicates()
         X_processed = preprocessor.transform(X)
@@ -532,12 +539,6 @@ def main():
         clean_names = [name.split('__')[-1].replace('_', ' ').title() for name in preprocessor.get_feature_names_out()]
         X_processed_df = pd.DataFrame(X_processed, columns=clean_names)
         
-        # ✅ FIX FOR SHAP: Extract base tree model from CalibratedClassifierCV
-        if isinstance(model, CalibratedClassifierCV):
-            base_model = model.estimators_[0] if hasattr(model, 'estimators_') else model.classifier
-        else:
-            base_model = model
-            
         booster = base_model.booster_ if hasattr(base_model, "booster_") else base_model._Booster if hasattr(base_model, "_Booster") else base_model.booster if hasattr(base_model, "booster") else base_model
         explainer = shap.TreeExplainer(booster)
         shap_values = explainer.shap_values(X_processed_df)
@@ -613,7 +614,7 @@ def main():
                         else: preprocessor_global = ColumnTransformer(transformers=[('num', StandardScaler(), numerical_auto), ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_auto)])
                         X_train_g, X_test_g, y_train_g, y_test_g = train_test_split(X_clean, y_clean, test_size=0.2, random_state=42)
                         
-                        # ✅ FIX: Applied calibration here too for custom data
+                        # ✅ FIX #4: Calibrated model for Global Setup
                         base_lgbm_global = lgb.LGBMClassifier(
                             n_estimators=300, learning_rate=0.05, random_state=42, verbose=-1, 
                             class_weight='balanced', min_child_samples=20, max_depth=6, 
@@ -621,10 +622,7 @@ def main():
                         )
                         calibrated_global = CalibratedClassifierCV(base_lgbm_global, method='sigmoid', cv=5)
                         
-                        global_pipeline = Pipeline(steps=[
-                            ('preprocessor', preprocessor_global), 
-                            ('classifier', calibrated_global)
-                        ])
+                        global_pipeline = Pipeline(steps=[('preprocessor', preprocessor_global), ('classifier', calibrated_global)])
                         global_pipeline.fit(X_train_g, y_train_g)
                         y_pred_g = global_pipeline.predict(X_test_g); acc = accuracy_score(y_test_g, y_pred_g)
                         final_df = new_df.loc[valid_idx].copy(); final_df['left'] = y_clean
@@ -745,7 +743,7 @@ def main():
                 prediction = pipeline.predict(input_df)[0]
                 raw_probas = pipeline.predict_proba(input_df)[0]
                 
-                # ✅ FIX #4: Clip probabilities to realistic range
+                # ✅ FIX #5: Probability Clipping (Prevents 0% and 100%)
                 MIN_PROB = 0.05
                 MAX_PROB = 0.95
                 prediction_probas = np.clip(raw_probas, MIN_PROB, MAX_PROB)
@@ -763,6 +761,7 @@ def main():
                 prediction = pipeline.predict(input_df)[0]
                 raw_probas = pipeline.predict_proba(input_df)[0]
                 
+                # ✅ FIX #5: Probability Clipping applied here too
                 MIN_PROB = 0.05
                 MAX_PROB = 0.95
                 prediction_probas = np.clip(raw_probas, MIN_PROB, MAX_PROB)
@@ -782,10 +781,10 @@ def main():
             with stay_prob_col: st.metric("Stay Probability", f"{st.session_state.prediction_probas[0]:.1%}")
             with leave_prob_col: st.metric("Leave Probability", f"{st.session_state.prediction_probas[1]:.1%}")
             
-            # ✅ FIX #5: Added Confidence Gauge UI
-            leave_prob = st.session_state.prediction_probas[1]
+            # ✅ FIX #6: Added the Confidence Gauge UI
             stay_prob = st.session_state.prediction_probas[0]
-            confidence = max(leave_prob, stay_prob)
+            leave_prob = st.session_state.prediction_probas[1]
+            confidence = max(stay_prob, leave_prob)
 
             if confidence < 0.6:
                 confidence_label = "⚠️ LOW CONFIDENCE"
@@ -827,7 +826,7 @@ def main():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
+            
             if st.session_state.prediction_result == 1:
                 st.markdown("---"); st.markdown("### 💡 Recommended Actions")
                 for rec in get_retention_strategies(st.session_state.input_df): st.info(rec)
