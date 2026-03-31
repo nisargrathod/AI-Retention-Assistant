@@ -669,10 +669,8 @@ def main():
         # ✅ FIX 1: Preserve original case for categorical features (e.g., "IT" stays "IT")
         clean_names = []
         for name in preprocessor.get_feature_names_out():
-            # Remove prefix if present (e.g., "num__" or "cat__")
             if '__' in name:
                 name = name.split('__')[-1]
-            # Replace underscores with spaces but DON'T apply .title() to preserve original values like "IT", "RandD"
             clean_names.append(name.replace('_', ' '))
         
         X_processed_df = pd.DataFrame(X_processed, columns=clean_names)
@@ -1179,7 +1177,7 @@ def main():
                 max_vals = stats_avg.abs().max(); norm_df = comparison_df.div(max_vals)
                 norm_df = norm_df.reset_index().melt(id_vars='index', var_name='Metric', value_name='Value'); norm_df.rename(columns={'index': 'Group'}, inplace=True)
                 fig = px.line_polar(norm_df, r='Value', theta='Metric', color='Group', line_close=True, template="plotly_dark", color_discrete_map={'Company Average': '#9ca3af', 'Happy Leavers': '#EEB76B', 'Loyal Sufferers': '#FF4B4B'})
-                fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1.2]))); st.plotly_chart(fig, use_container_width=True)
+                fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1.2])); st.plotly_chart(fig, use_container_width=True)
 
         with tab4:
             st.subheader("📊 Retention Priority Matrix")
@@ -1252,15 +1250,24 @@ def main():
                         st.markdown(f"<div class='custom-card' style='text-align: center; border-top: 4px solid #17B794;'><h3 style='margin-top: 0;'>{title}</h3><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{text}</p></div>", unsafe_allow_html=True)
                 st.markdown("---"); st.markdown("### 📝 Hiring Checklist (Do's & Don'ts)"); st.write("Based on the data, apply these filters to your next job opening:")
                 checklist = []
-                if 'satisfaction_level' in super_mean.index and (super_mean.get('satisfaction_level', 0) - avg_mean.get('satisfaction_level', 0)) > 0.1: checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who mention 'Culture', 'Team', or 'Values' as their top reason for leaving previous jobs."})
-                else: checklist.append({"Type": "⚠️ CAUTION", "Rule": "Satisfaction isn't a major differentiator here. Don't over-prioritize 'culture fit' questions."})
+                
+                # ✅ FIX: Only show satisfaction advice if it's actually in the Top 3 differentiators shown above
+                top_3_features = top_3_diff['Metric'].tolist()
+                satisfaction_in_top3 = any('satisfaction' in f.lower() for f in top_3_features)
+                
+                if satisfaction_in_top3:
+                    sat_diff = super_mean.get('satisfaction_level', 0) - avg_mean.get('satisfaction_level', 0)
+                    if sat_diff > 0.1:
+                        checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who mention 'Culture', 'Team', or 'Values' as their top reason for leaving previous jobs."})
+                    elif sat_diff < -0.1:
+                        checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who seem disconnected from company culture."})
+                
                 if 'average_montly_hours' in super_mean.index and (super_mean.get('average_montly_hours', 0) - avg_mean.get('average_montly_hours', 0)) < -10:
                     checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who demonstrate 'Work-Life Balance' and set boundaries."})
                     checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who brag about 'sleeping at the office' or working 80-hour weeks."})
                 for item in checklist:
                     if "DO" in item['Type']: st.success(f"**{item['Type']}**: {item['Rule']}")
                     elif "AVOID" in item['Type']: st.error(f"**{item['Type']}**: {item['Rule']}")
-                    else: st.warning(f"**{item['Type']}**: {item['Rule']}")
 
     # ====================================================================
     # Page: STRATEGIC ROADMAP
