@@ -711,7 +711,7 @@ def main():
         )
         
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("<div style='text-align:center; padding:15px; border-top:1px solid #2d333b;'><div style='font-size:0.9rem; color:#8b949e;'>Built by</div><div style='font-size:1.5rem; font-weight:600; color:#00E5A8;'>Nisarg Rathod</div></div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; padding:20px; border-top:1px solid #2d333b;'><div style='font-size:0.85rem; color:#8b949e;'>Built by</div><div style='font-size:1.6rem; font-weight:600; color:#00E5A8; margin-bottom:10px;'>Nisarg Rathod</div><div style='display:flex; justify-content:center; gap:15px;'><!-- LinkedIn --><a href='https://www.linkedin.com/in/nisarg-rathod/' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#0A66C2; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkedin.svg' width='16' height='16' style='filter:invert(1);'/>LinkedIn</a<!-- GitHub --><a href='https://github.com/nisargrathod' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#24292e; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/github.svg' width='16' height='16' style='filter:invert(1);'/>GitHub</a></div></div>", unsafe_allow_html=True)
 
     # ====================================================================
     # PAGE: GLOBAL SETUP
