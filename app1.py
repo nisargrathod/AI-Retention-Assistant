@@ -665,7 +665,16 @@ def main():
         X = _df.drop('left', axis=1).drop_duplicates()
         X_processed = preprocessor.transform(X)
         if issparse(X_processed): X_processed = X_processed.toarray()
-        clean_names = [name.split('__')[-1].replace('_', ' ').title() for name in preprocessor.get_feature_names_out()]
+        
+        # ✅ FIX 1: Preserve original case for categorical features (e.g., "IT" stays "IT")
+        clean_names = []
+        for name in preprocessor.get_feature_names_out():
+            # Remove prefix if present (e.g., "num__" or "cat__")
+            if '__' in name:
+                name = name.split('__')[-1]
+            # Replace underscores with spaces but DON'T apply .title() to preserve original values like "IT", "RandD"
+            clean_names.append(name.replace('_', ' '))
+        
         X_processed_df = pd.DataFrame(X_processed, columns=clean_names)
         booster = model.booster_ if hasattr(model, "booster_") else model._Booster if hasattr(model, "_Booster") else model.booster if hasattr(model, "booster") else model
         explainer = shap.TreeExplainer(booster)
@@ -711,7 +720,7 @@ def main():
         )
         
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("<div style='text-align:center; padding:20px; border-top:1px solid #2d333b;'><div style='font-size:0.85rem; color:#8b949e;'>Built by</div><div style='font-size:1.6rem; font-weight:600; color:#00E5A8; margin-bottom:10px;'>Nisarg Rathod</div><div style='display:flex; justify-content:center; gap:15px;'><!-- LinkedIn --><a href='https://www.linkedin.com/in/nisarg-rathod/' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#0A66C2; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkedin.svg' width='16' height='16' style='filter:invert(1);'/>LinkedIn</a<!-- GitHub --><a href='https://github.com/nisargrathod' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#24292e; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/github.svg' width='16' height='16' style='filter:invert(1);'/>GitHub</a></div></div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; padding:20px; border-top:1px solid #2d333b;'><div style='font-size:0.85rem; color:#8b949e;'>Built by</div><div style='font-size:1.6rem; font-weight:600; color:#00E5A8; margin-bottom:10px;'>Nisarg Rathod</div><div style='display:flex; justify-content:center; gap:15px;'><!-- LinkedIn --><a href='https://www.linkedin.com/in/nisarg-rathod/' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#0A66C2; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkedin.svg' width='16' height='16' style='filter:invert(1);'/>LinkedIn</a><!-- GitHub --><a href='https://github.com/nisargrathod' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#24292e; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/github.svg' width='16' height='16' style='filter:invert(1);'/>GitHub</a></div></div>", unsafe_allow_html=True)
 
     # ====================================================================
     # PAGE: GLOBAL SETUP
@@ -1083,10 +1092,23 @@ def main():
                         c_m1, c_m2, c_m3 = st.columns(3)
                         c_m1.metric(f"{selected_dept_name} Workforce", f"{dept_count} Employees"); c_m2.metric("Attrition Rate", f"{dept_attrition:.1f}%", delta=delta_text, delta_color=delta_color); c_m3.metric("Risk Level", "High" if dept_attrition > 20 else "Moderate" if dept_attrition > 10 else "Low")
                         st.markdown("---"); shap_vals, X_proc_df = get_shap_explanations(pipeline, df)
+                        
+                        # ✅ FIX 2: Robust department column matching (handles "Department IT", "x0_IT", "IT", etc.)
                         target_col = None
+                        dept_normalized = selected_dept_name.lower().replace('_', '').replace(' ', '')
+                        
                         for col in X_proc_df.columns:
-                            if 'Department' in col and selected_dept_name.lower() in col.lower(): target_col = col; break
-                        if not target_col: st.error(f"Could not find data for {selected_dept_name} in the model features.")
+                            col_normalized = col.lower().replace('_', '').replace(' ', '')
+                            if dept_normalized in col_normalized:
+                                target_col = col
+                                break
+                        
+                        if not target_col:
+                            st.error(f"Could not find data for {selected_dept_name} in the model features.")
+                            with st.expander("🔧 Debug Info"):
+                                st.write("**Department searched for:**", selected_dept_name)
+                                st.write("**Normalized search term:**", dept_normalized)
+                                st.write("**Available columns:**", X_proc_df.columns.tolist())
                         else:
                             dept_mask = X_proc_df[target_col] == 1
                             if dept_mask.sum() == 0: st.warning(f"Not enough data to analyze {selected_dept_name} specifically.")
@@ -1095,7 +1117,8 @@ def main():
                                 else: dept_shap = shap_vals[dept_mask]
                                 mean_shap = np.abs(dept_shap).mean(axis=0)
                                 importance_df = pd.DataFrame({'Feature': X_proc_df.columns, 'Impact_Score': mean_shap})
-                                importance_df = importance_df[~importance_df['Feature'].str.contains('Department')]
+                                importance_df = importance_df[~importance_df['Feature'].str.contains('Department', case=False)]
+                                importance_df = importance_df[~importance_df['Feature'].str.match(r'^x\d')]
                                 importance_df.sort_values('Impact_Score', ascending=False, inplace=True); top_3_drivers = importance_df.head(3)
                                 chart_df = importance_df.head(5).iloc[::-1] 
                                 fig = px.bar(chart_df, x='Impact_Score', y='Feature', orientation='h', title=f"What is driving attrition in {selected_dept_name}?", template="plotly_dark", color_discrete_sequence=['#17B794'])
