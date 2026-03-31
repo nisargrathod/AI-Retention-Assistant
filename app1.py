@@ -711,7 +711,7 @@ def main():
         )
         
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("<div style='padding: 20px; text-align: center; color: #8b949e; font-size: 0.8rem;'>Developed by<br><strong>Nisarg Rathod</strong></div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; padding:15px; border-top:1px solid #2d333b;'><div style='font-size:0.9rem; color:#8b949e;'>Built by</div><div style='font-size:1.5rem; font-weight:600; color:#00E5A8;'>Nisarg Rathod</div></div>", unsafe_allow_html=True)
 
     # ====================================================================
     # PAGE: GLOBAL SETUP
