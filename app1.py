@@ -666,7 +666,6 @@ def main():
         X_processed = preprocessor.transform(X)
         if issparse(X_processed): X_processed = X_processed.toarray()
         
-        # ✅ FIX 1: Preserve original case for categorical features (e.g., "IT" stays "IT")
         clean_names = []
         for name in preprocessor.get_feature_names_out():
             if '__' in name:
@@ -718,7 +717,7 @@ def main():
         )
         
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("<div style='text-align:center; padding:20px; border-top:1px solid #2d333b;'><div style='font-size:0.85rem; color:#8b949e;'>Built by</div><div style='font-size:1.6rem; font-weight:600; color:#00E5A8; margin-bottom:10px;'>Nisarg Rathod</div><div style='display:flex; justify-content:center; gap:15px;'><!-- LinkedIn --><a href='https://www.linkedin.com/in/nisarg-rathod/' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#0A66C2; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkedin.svg' width='16' height='16' style='filter:invert(1);'/>LinkedIn</a><!-- GitHub --><a href='https://github.com/nisargrathod' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#24292e; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/github.svg' width='16' height='16' style='filter:invert(1);'/>GitHub</a></div></div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; padding:20px; border-top:1px solid #2d333b;'><div style='font-size:0.85rem; color:#8b949e;'>Built by</div><div style='font-size:1.6rem; font-weight:600; color:#00E5A8; margin-bottom:10px;'>Nisarg Rathod</div><div style='display:flex; justify-content:center; gap:15px;'><a href='https://www.linkedin.com/in/nisarg-rathod/' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#0A66C2; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkedin.svg' width='16' height='16' style='filter:invert(1);'/>LinkedIn</a><a href='https://github.com/nisargrathod' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#24292e; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/github.svg' width='16' height='16' style='filter:invert(1);'/>GitHub</a></div></div>", unsafe_allow_html=True)
 
     # ====================================================================
     # PAGE: GLOBAL SETUP
@@ -888,7 +887,6 @@ def main():
             stay_prob = st.session_state.prediction_probas[0]
             leave_prob = st.session_state.prediction_probas[1]
             
-            # ✅ Convert to whole percentages (no decimal points)
             stay_percent = int(round(stay_prob * 100))
             leave_percent = int(round(leave_prob * 100))
             
@@ -1091,7 +1089,6 @@ def main():
                         c_m1.metric(f"{selected_dept_name} Workforce", f"{dept_count} Employees"); c_m2.metric("Attrition Rate", f"{dept_attrition:.1f}%", delta=delta_text, delta_color=delta_color); c_m3.metric("Risk Level", "High" if dept_attrition > 20 else "Moderate" if dept_attrition > 10 else "Low")
                         st.markdown("---"); shap_vals, X_proc_df = get_shap_explanations(pipeline, df)
                         
-                        # ✅ FIX 2: Robust department column matching (handles "Department IT", "x0_IT", "IT", etc.)
                         target_col = None
                         dept_normalized = selected_dept_name.lower().replace('_', '').replace(' ', '')
                         
@@ -1177,7 +1174,7 @@ def main():
                 max_vals = stats_avg.abs().max(); norm_df = comparison_df.div(max_vals)
                 norm_df = norm_df.reset_index().melt(id_vars='index', var_name='Metric', value_name='Value'); norm_df.rename(columns={'index': 'Group'}, inplace=True)
                 fig = px.line_polar(norm_df, r='Value', theta='Metric', color='Group', line_close=True, template="plotly_dark", color_discrete_map={'Company Average': '#9ca3af', 'Happy Leavers': '#EEB76B', 'Loyal Sufferers': '#FF4B4B'})
-                fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1.2])); st.plotly_chart(fig, use_container_width=True)
+                fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1.2]))); st.plotly_chart(fig, use_container_width=True)
 
         with tab4:
             st.subheader("📊 Retention Priority Matrix")
@@ -1251,23 +1248,91 @@ def main():
                 st.markdown("---"); st.markdown("### 📝 Hiring Checklist (Do's & Don'ts)"); st.write("Based on the data, apply these filters to your next job opening:")
                 checklist = []
                 
-                # ✅ FIX: Only show satisfaction advice if it's actually in the Top 3 differentiators shown above
+                # ============================================================
+                # FIXED: Dynamic checklist that covers ALL top-3 differentiators
+                # ============================================================
                 top_3_features = top_3_diff['Metric'].tolist()
-                satisfaction_in_top3 = any('satisfaction' in f.lower() for f in top_3_features)
                 
-                if satisfaction_in_top3:
-                    sat_diff = super_mean.get('satisfaction_level', 0) - avg_mean.get('satisfaction_level', 0)
-                    if sat_diff > 0.1:
-                        checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who mention 'Culture', 'Team', or 'Values' as their top reason for leaving previous jobs."})
-                    elif sat_diff < -0.1:
-                        checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who seem disconnected from company culture."})
+                for _, row in top_3_diff.iterrows():
+                    feature = row['Metric']
+                    diff_val = row['Difference']
+                    feature_lower = feature.lower()
+                    
+                    if 'satisfaction' in feature_lower:
+                        if diff_val > 0.05:
+                            checklist.append({"Type": "✅ DO Look For", "Rule": f"Candidates who value 'Culture', 'Team', and 'Purpose' (Superstars are {diff_val:.2f} pts more satisfied)"})
+                        elif diff_val < -0.05:
+                            checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who seem disconnected from company culture or overly focused only on perks."})
+                        else:
+                            checklist.append({"Type": "ℹ️ NOTE", "Rule": "Satisfaction is not a major differentiator here. Don't over-prioritize 'culture fit' questions."})
+                    
+                    elif 'hour' in feature_lower or 'time_spend' in feature_lower:
+                        if diff_val < -5:
+                            checklist.append({"Type": "✅ DO Look For", "Rule": f"Candidates who demonstrate 'Work-Life Balance' and set healthy boundaries (Superstars work {abs(diff_val):.0f} hrs less)"})
+                            checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who brag about 'sleeping at the office' or working 80-hour weeks consistently."})
+                        elif diff_val > 5:
+                            checklist.append({"Type": "✅ DO Look For", "Rule": f"High-energy candidates willing to put in extra hours when the project demands it."})
+                            checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who strictly clock out at 5 PM regardless of deadlines or team needs."})
+                    
+                    elif 'project' in feature_lower:
+                        if diff_val > 0.3:
+                            checklist.append({"Type": "✅ DO Look For", "Rule": f"Candidates who can comfortably handle {int(diff_val)}+ concurrent projects without burning out."})
+                        elif diff_val < -0.3:
+                            checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who prefer focused, deep work on fewer projects rather than juggling many."})
+                    
+                    elif 'evaluation' in feature_lower:
+                        if diff_val > 0.05:
+                            checklist.append({"Type": "✅ DO Look For", "Rule": f"Candidates with a proven track record of exceeding targets (Superstars score {diff_val:.2f} pts higher)"})
+                        elif diff_val < -0.05:
+                            checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who seem overconfident but lack measurable achievements to back it up."})
+                    
+                    elif 'accident' in feature_lower:
+                        if diff_val < -0.02:
+                            checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who emphasize safety protocols, process compliance, and risk awareness."})
+                    
+                    elif 'promotion' in feature_lower:
+                        if diff_val > 0.02:
+                            checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who show a growth mindset, ambition, and interest in long-term career progression."})
+                        elif diff_val < -0.02:
+                            checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who seem entitled or expect rapid promotions without putting in the effort."})
+                    
+                    elif 'salary' in feature_lower or 'wage' in feature_lower:
+                        if diff_val > 0:
+                            checklist.append({"Type": "⚠️ NOTE", "Rule": "Superstars tend to be in higher salary bands — ensure your offer is competitive for top talent."})
+                        else:
+                            checklist.append({"Type": "ℹ️ NOTE", "Rule": "Pay parity exists among top performers. Focus on non-monetary benefits in your pitch."})
+                    
+                    elif 'tenure' in feature_lower or 'spend_company' in feature_lower:
+                        if diff_val > 0.5:
+                            checklist.append({"Type": "✅ DO Look For", "Rule": f"Candidates with longer tenures at previous companies ({diff_val:.1f}+ years avg) — shows loyalty and resilience."})
+                        elif diff_val < -0.5:
+                            checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who bring fresh perspectives from diverse experiences, even if tenures are shorter."})
+                    
+                    else:
+                        metric_clean = feature.replace('_', ' ').title()
+                        if diff_val > 0:
+                            checklist.append({"Type": "✅ CONSIDER", "Rule": f"Higher '{metric_clean}' scores may correlate with top performance. Probe this area in interviews."})
+                        else:
+                            checklist.append({"Type": "✅ CONSIDER", "Rule": f"Lower '{metric_clean}' scores may correlate with top performance. Don't assume higher is always better."})
                 
-                if 'average_montly_hours' in super_mean.index and (super_mean.get('average_montly_hours', 0) - avg_mean.get('average_montly_hours', 0)) < -10:
-                    checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who demonstrate 'Work-Life Balance' and set boundaries."})
-                    checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who brag about 'sleeping at the office' or working 80-hour weeks."})
+                # Fallback: if still empty, show universal best practices
+                if len(checklist) == 0:
+                    checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who demonstrate stability in previous roles (2+ years per company on average)."})
+                    checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who ask thoughtful questions about company culture, team dynamics, and growth opportunities."})
+                    checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who focus exclusively on salary and title, with no interest in the role itself or the team."})
+                
+                # Render the checklist with appropriate styling
                 for item in checklist:
-                    if "DO" in item['Type']: st.success(f"**{item['Type']}**: {item['Rule']}")
-                    elif "AVOID" in item['Type']: st.error(f"**{item['Type']}**: {item['Rule']}")
+                    if "DO" in item['Type']: 
+                        st.success(f"**{item['Type']}**: {item['Rule']}")
+                    elif "AVOID" in item['Type']: 
+                        st.error(f"**{item['Type']}**: {item['Rule']}")
+                    elif "NOTE" in item['Type']: 
+                        st.warning(f"**{item['Type']}**: {item['Rule']}")
+                    elif "CONSIDER" in item['Type']: 
+                        st.info(f"**{item['Type']}**: {item['Rule']}")
+                    else: 
+                        st.info(f"**{item['Type']}**: {item['Rule']}")
 
     # ====================================================================
     # Page: STRATEGIC ROADMAP
