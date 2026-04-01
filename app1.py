@@ -1223,12 +1223,16 @@ def main():
                                         card_html = f"<div class='custom-card' style='border-top: 4px solid #17B794;'><div style='display: flex; align-items: center; margin-bottom: 10px;'><span style='font-size: 1.5rem; margin-right: 10px;'>{icon}</span><h4 style='margin: 0; color: #fff;'>{title}</h4></div><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{advice}</p><small style='color: #8b949e;'>Driver: {feature_name.replace('_', ' ').title()}</small></div></div>"
                                         with col: st.markdown(card_html, unsafe_allow_html=True)
 
+        # ====================================================================
+        # AI DISRUPTION DEFENSE (Now includes the "Proof of Work" narrative)
+        # ====================================================================
         with tab3:
             st.subheader("🛡️ AI Disruption Defense")
             st.caption("Prove to leadership that reskilling is cheaper than mass layoffs.")
             st.error("**The Fear:** CEO asks, 'Can we just replace half the team with AI tools?'")
             st.success("**The Reality:** AI replaces *tasks*, not jobs. And layoffs cost way more than you think.")
             st.write("")
+            
             if 'Department' in df.columns and 'satisfaction_level' in df.columns:
                 st.markdown("### Step 1: Department Vulnerability Assessment")
                 dept_vuln = []
@@ -1244,7 +1248,23 @@ def main():
                 fig_vuln.update_layout(xaxis_title="0 = Safe (Complex Work) | 100 = At Risk (Repetitive Work)", yaxis_title="", margin=dict(l=0, r=0, t=40, b=0))
                 st.plotly_chart(fig_vuln, use_container_width=True)
                 st.info("**How to read this:** A score of 70+ means the department likely has many repetitive tasks. A score under 30 means the work is too complex for current AI.")
-            st.markdown("---"); st.markdown("### Step 2: The Billion-Rupee Calculator (Reskill vs. Layoff)")
+
+            # --- THE NEW STRATEGIC NARRATIVE ---
+            st.markdown("---")
+            st.markdown("""
+            <div class="custom-card" style="border-left: 5px solid #9ca3ca; background: linear-gradient(to right, #151d28 0%, #1c2128 100%);">
+                <h4 style="color: #9ca3ca; margin-top: 0;">🧠 The 'Proof of Work' Defense Strategy</h4>
+                <p style="color: #e6edf3; font-size: 1rem; font-weight: 600; margin-bottom: 10px;">What to say when the CEO asks: "Can we just use AI to cut headcount?"</p>
+                <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.6; margin-bottom: 10px;">
+                "We shouldn't try to compete with AI on speed; we must compete on strategy. AI can write code in 10 seconds, but it takes a human 3 weeks to understand the business context, manage stakeholder politics, and ensure compliance. If we lay off 200 people to save ₹12 Cr, we lose their domain expertise. If we give 50 people AI tools, we increase their capacity by 30%, allowing us to <strong>absorb the workload of the 200 people who left last year</strong> without losing institutional knowledge."
+                </p>
+                <p style="color: #8b949e; font-size: 0.85rem; margin-top: 10px; margin-bottom: 0;">
+                <strong>Bottom Line:</strong> AI doesn't replace jobs; it replaces tasks. Our goal isn't to have fewer people; it's to have highly utilized people. We should pitch AI as a way to make our existing team 30% faster, not as a way to fire people.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("### Step 2: The Billion-Rupee Calculator (Reskill vs. Layoff)")
             c_inp1, c_inp2 = st.columns(2)
             with c_inp1:
                 num_employees = st.number_input("How many employees are at risk of AI replacement?", min_value=5, max_value=500, value=50, step=5)
@@ -1279,7 +1299,7 @@ def main():
                     except Exception as e:
                         if "rate_limit" in str(e).lower() or "429" in str(e): st.warning("⏳ **AI is busy right now.** Please wait 30 seconds and try again.")
                         else: st.error(f"❌ Error generating memo: {e}")
-
+                            
     # ====================================================================
     # Page: STRATEGIC ROADMAP
     # ====================================================================
