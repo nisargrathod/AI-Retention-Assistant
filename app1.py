@@ -960,7 +960,7 @@ def main():
         <div class="custom-card" style="border-left: 5px solid #FF4B4B; background: linear-gradient(to right, #2d1515 0%, #1c2128 100%);">
             <h3 style="color: #FF4B4B; margin-top: 0;">💸 Phase 1: The Burn Rate</h3>
             <p style="color: #e6edf3; font-size: 1rem;"><strong>The Question:</strong> "How much money are we actually losing, and where?"</p>
-            <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0;">CFOs speak in money. Translating "23% attrition" into "₹5 Crores lost" immediately gets budget approval.</p>
+            <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0;'>CFOs speak in money. Translating "23% attrition" into hard numbers immediately gets budget approval.</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -971,40 +971,67 @@ def main():
             df_left = df_cost[df_cost['left'] == 1].copy()
             
             if len(df_left) > 0:
-                # Industry Standard Math
-                df_left['recruiting_cost'] = df_left['annual_salary'] * 0.20
-                df_left['onboarding_cost'] = df_left['annual_salary'] * 0.30
+                # --- CORRECTED MATH: Standard HR Industry Formula ---
+                # Base cost is 50% of salary, increasing by 10% for every year of tenure (capped at 2x)
                 if 'time_spend_company' in df_left.columns:
-                    df_left['knowledge_loss_pct'] = (df_left['time_spend_company'] * 0.10).clip(upper=0.50)
-                    df_left['knowledge_loss_cost'] = df_left['annual_salary'] * df_left['knowledge_loss_pct']
+                    tenure_multiplier = (1 + (df_left['time_spend_company'] * 0.10)).clip(upper=2.0)
+                    df_left['total_cost'] = df_left['annual_salary'] * 0.5 * tenure_multiplier
                 else:
-                    df_left['knowledge_loss_cost'] = df_left['annual_salary'] * 0.30
+                    df_left['total_cost'] = df_left['annual_salary'] * 0.75  # Default 75% if no tenure data
                 
-                df_left['total_cost'] = df_left['recruiting_cost'] + df_left['onboarding_cost'] + df_left['knowledge_loss_cost']
-                
+                # Aggregate by department
                 dept_costs = df_left.groupby('Department').agg(
-                    employees_left=('left', 'count'), total_recruiting=('recruiting_cost', 'sum'),
-                    total_onboarding=('onboarding_cost', 'sum'), total_knowledge_loss=('knowledge_loss_cost', 'sum'),
-                    total_cost=('total_cost', 'sum'), avg_salary=('annual_salary', 'mean')
+                    employees_left=('left', 'count'),
+                    total_cost=('total_cost', 'sum'),
+                    avg_salary=('annual_salary', 'mean'),
+                    avg_tenure=('time_spend_company', 'mean') if 'time_spend_company' in df_left.columns else pd.Series(3.0)
                 ).reset_index().sort_values('total_cost', ascending=False)
                 
                 grand_total = dept_costs['total_cost'].sum(); total_left = dept_costs['employees_left'].sum()
                 avg_exit_cost = grand_total / total_left
                 
+                # Shock Value Metrics
                 c_shock1, c_shock2, c_shock3 = st.columns(3)
-                c_shock1.metric("Total Money Lost to Attrition", f"₹{grand_total/10000000:.2f} Cr", delta=f"{total_left} Employees", delta_color="inverse")
-                c_shock2.metric("Avg. Cost Per Exit", f"₹{avg_exit_cost:,.0f}", delta="Replace vs. Retain")
-                c_shock3.metric("Most Expensive Dept.", dept_costs.iloc[0]['Department'], delta=f"₹{dept_costs.iloc[0]['total_cost']/10000000:.2f} Cr", delta_color="inverse")
+                c_shock1.metric("Total Money Lost to Attrition", f"₹{grand_total/10000000:.2f} Cr", delta=f"{total_left} Employees Left", delta_color="inverse")
+                c_shock2.metric("Avg. Cost Per Exit", f"₹{avg_exit_cost:,.0f}", delta="Industry Standard Math")
+                c_shock3.metric("Most Expensive Dept.", dept_costs.iloc[0]['Department'], delta=f"₹{dept_costs.iloc[0]['total_cost']/10000000:.2f} Cr Lost", delta_color="inverse")
                 
-                dept_melted = dept_costs.melt(id_vars=['Department'], value_vars=['total_recruiting', 'total_onboarding', 'total_knowledge_loss'], var_name='Cost Type', value_name='Amount')
-                dept_melted['Cost Type'] = dept_melted['Cost Type'].map({'total_recruiting': 'Recruiting (Agency/Postings)', 'total_onboarding': 'Onboarding (Training/Lost Prod)', 'total_knowledge_loss': 'Knowledge Loss (Exp. Walking Out)'})
+                with st.expander("📐 How we calculate this (Click to verify)"):
+                    st.markdown("""
+                    We use the **Standard HR Industry Formula** for turnover cost:\n
+                    > `Cost = 50% of Annual Salary × (1 + Years of Tenure × 10%)`
+                    
+                    *   **Base Replacement Cost:** 50% of salary (covers recruiting, onboarding, admin).
+                    *   **Experience Penalty:** +10% for every year of experience the employee had (captures institutional knowledge loss).
+                    *   **Cap:** The multiplier is capped at 2.0x (200% of salary) for very senior employees.
+                    
+                    *Example:* A 5-year employee earning ₹6L costs `0.5 × 6L × 1.5 = ₹4.5L` to replace.
+                    """)
                 
-                fig_cost = px.bar(dept_melted, x='Department', y='Amount', color='Cost Type', title="True Cost of Turnover by Department", template="plotly_dark", color_discrete_map={'Recruiting (Agency/Postings)': '#FF4B4B', 'Onboarding (Training/Lost Prod)': '#EEB76B', 'Knowledge Loss (Exp. Walking Out)': '#9C3D54'})
-                fig_cost.update_layout(yaxis=dict(tickformat=',.0f'), xaxis={'categoryorder': 'total descending'}, height=450)
-                custome_layout(fig_cost, showlegend=True); st.plotly_chart(fig_cost, use_container_width=True)
+                # Bar Chart
+                fig_cost = px.bar(
+                    dept_costs, 
+                    x='Department', 
+                    y='total_cost', 
+                    title="True Cost of Turnover by Department",
+                    template="plotly_dark",
+                    color='total_cost',
+                    color_continuous_scale=['#17B794', '#FF4B4B'],
+                    height=450
+                )
+                fig_cost.update_layout(
+                    yaxis_title="Total Loss (₹)",
+                    yaxis=dict(tickformat=',.0f'),
+                    xaxis={'categoryorder': 'total descending'},
+                    xaxis_title="",
+                    showlegend=False
+                )
+                custome_layout(fig_cost, title_size=24, showlegend=False); 
+                st.plotly_chart(fig_cost, use_container_width=True)
                 
+                # Executive Talking Point
                 top_dept = dept_costs.iloc[0]
-                st.markdown(f"""<div class="custom-card" style="border-left: 4px solid #FF4B4B;"><h4 style="color: #FF4B4B; margin-top: 0;">Executive Talking Point</h4><p style="color: #e6edf3; font-size: 1.1rem;"><strong>{top_dept['Department']} attrition cost us ₹{top_dept['total_cost']/10000000:.2f} Crores last year.</strong> That's more than their entire annual salary budget.</p></div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class="custom-card" style="border-left: 4px solid #FF4B4B;"><h4 style="color: #FF4B4B; margin-top: 0;">Executive Talking Point</h4><p style="color: #e6edf3; font-size: 1.1rem;"><strong>{top_dept['Department']} attrition cost us ₹{top_dept['total_cost']/10000000:.2f} Crores last year.</strong> That's the price of losing {top_dept['employees_left']} employees and their accumulated experience.</p></div>""", unsafe_allow_html=True)
             else:
                 st.info("No historical attrition data found in this dataset.")
         else:
@@ -1093,7 +1120,7 @@ def main():
                             st.dataframe(display_df, use_container_width=True)
                         else:
                             st.error("❌ Optimization failed. Budget may be too low to save anyone.")
-
+                            
     if page == "AI Assistant":
         st.header("🤖 AI Assistant")
         st.markdown("<p style='color: #9ca3af;'>Tools to ensure reliability and simplify communication.</p>", unsafe_allow_html=True)
