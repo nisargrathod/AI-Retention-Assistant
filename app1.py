@@ -1224,17 +1224,20 @@ def main():
                             return
                         
                         llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.5, timeout=30)
+                        
+                        # FIXED FORMAT STRING ERROR HERE
                         template = """You are an HR Director writing to the CEO. Keep it strictly under 400 words. Use bullet points. No fluff.
 
 **Context:**
 - We analyzed {num_employees} employees at risk of AI automation.
-- Layoff + rehiring AI talent costs: ₹{total_layoff_cost}/10000000:.1f} Cr.
-- Reskilling the same team costs: ₹{total_reskill_cost}/10000000:.1f} Cr.
-- Reskilling saves us ₹{savings}/10000000:.1f} Cr.
+- Layoff + rehiring AI talent costs: {total_layoff_cost}.
+- Reskilling the same team costs: {total_reskill_cost}.
+- Reskilling saves us {savings}.
 - Layoffs cause hidden costs: institutional knowledge loss, 30% drop in remaining team morale, employer brand damage.
 
 **Task:**
 Recommend reskilling. Briefly explain why layoffs are a trap for companies in our stage. Propose a 6-month pilot reskilling program."""
+                        
                         prompt = PromptTemplate.from_template(template)
                         chain = prompt | llm | StrOutputParser()
                         response = chain.invoke({"num_employees": num_employees, "total_layoff_cost": f"₹{total_layoff_cost/10000000:.1f} Cr", "total_reskill_cost": f"₹{total_reskill_cost/10000000:.1f} Cr", "savings": f"₹{savings/10000000:.1f} Cr"})
@@ -1297,7 +1300,6 @@ Recommend reskilling. Briefly explain why layoffs are a trap for companies in ou
                 diff_df = pd.DataFrame({'Metric': metrics_to_compare, 'Difference': (super_mean - avg_mean).values})
                 diff_df['Abs_Diff'] = diff_df['Difference'].abs(); top_3_diff = diff_df.nlargest(3, 'Abs_Diff')
                 
-                # FIX 1: Properly create columns and list
                 col_dna1, col_dna2, col_dna3 = st.columns(3)
                 cols = [col_dna1, col_dna2, col_dna3]
                 
@@ -1314,7 +1316,6 @@ Recommend reskilling. Briefly explain why layoffs are a trap for companies in ou
                         else: return "🔴 Low Performance", f"Superstars score lower."
                     else: return "📊 " + metric_name, f"Difference of {diff_val:.2f}."
                 
-                # FIX 2: Properly iterate with 'with col:'
                 for i, col in enumerate(cols):
                     if i < len(top_3_diff):
                         row = top_3_diff.iloc[i]
@@ -1460,7 +1461,6 @@ Recommend reskilling. Briefly explain why layoffs are a trap for companies in ou
         if st.button("📈 Show Me the 12-Month Projection", type="primary"):
             months = list(range(1, 13)); current_workforce = len(df)
             
-            # FIX 3: Proper closing bracket on predict_proba
             raw_risk_scores = pipeline.predict_proba(df.drop('left', axis=1))[:, 1]
             total_risk_score = calibrate_probability_array(raw_risk_scores, temperature=0.55).sum()
             
@@ -1468,7 +1468,6 @@ Recommend reskilling. Briefly explain why layoffs are a trap for companies in ou
             monthly_leavers_with_action = monthly_leavers_no_action * (1 - (intervention_efficacy / 100.0))
             forecast_bau = []; forecast_intervention = []; temp_bau = float(current_workforce); temp_int = float(current_workforce)
             
-            # FIX 4: Complete forecast loop logic
             for m in months:
                 natural_leavers_bau = temp_bau * (natural_attrition_rate / 100.0)
                 natural_leavers_int = temp_int * (natural_attrition_rate / 100.0)
@@ -1480,8 +1479,6 @@ Recommend reskilling. Briefly explain why layoffs are a trap for companies in ou
                 forecast_intervention.append(temp_int)
             
             forecast_df = pd.DataFrame({'Month': months, 'If We Do Nothing (Status Quo)': forecast_bau, 'If We Follow the Plan': forecast_intervention}).melt(id_vars='Month', var_name='Scenario', value_name='Workforce Count')
-            
-            # FIX 5: Remove duplicate color_discrete_map
             fig_forecast = px.line(forecast_df, x='Month', y='Workforce Count', color='Scenario', title="Projected Workforce Size Over the Next 12 Months", template="plotly_dark", markers=True, color_discrete_map={'If We Do Nothing (Status Quo)': "#EEB76B", 'If We Follow the Plan': "#17B794"})
             fig_forecast.update_layout(yaxis_title="Total Employee Headcount", xaxis=dict(dtick=1)); st.plotly_chart(fig_forecast, use_container_width=True)
             saved_employees = forecast_intervention[-1] - forecast_bau[-1]
