@@ -235,8 +235,6 @@ def format_money(amount):
     else: return f"{sym}{val:,.0f}"
 
 def get_salary_map():
-    """Returns base INR salary map which gets multiplied by currency multiplier later if needed, 
-    but for simplicity we map to fixed INR values and format_money handles conversion."""
     return {'low': 400000, 'medium': 600000, 'high': 900000}
 
 def calibrate_probability(prob, temperature=0.55):
@@ -295,13 +293,15 @@ def create_vizualization(the_df):
         tabs = st.tabs(["Numeric Distributions", "Categorical Counts", "Ratios"])
         with tabs[0]:
             for col in num_cols:
-                if the_df[col].nunique() > 5: st.plotly_chart(box_plot(the_df, col), use_container_width=True)
+                if the_df[col].nunique() > 5: 
+                    st.plotly_chart(box_plot(the_df, col), use_container_width=True)
         with tabs[1]:
             for col in obj_cols:
                 st.plotly_chart(bar_plot(the_df, col), use_container_width=True)
         with tabs[2]:
             for col in the_df.columns:
-                if 1 < the_df[col].nunique() <= 4: st.plotly_chart(pie_chart(the_df, col), use_container_width=True)
+                if 1 < the_df[col].nunique() <= 4: 
+                    st.plotly_chart(pie_chart(the_df, col), use_container_width=True)
         st.plotly_chart(create_heat_map(the_df), use_container_width=True)
 
 # ====================================================================
@@ -342,7 +342,8 @@ def get_shap_explanations(_pipeline, _df):
         preprocessor = _pipeline.named_steps['preprocessor']
         X = _df.drop('left', axis=1).drop_duplicates()
         X_processed = preprocessor.transform(X)
-        if issparse(X_processed): X_processed = X_processed.toarray()
+        if issparse(X_processed): 
+            X_processed = X_processed.toarray()
         
         clean_names = [name.split('__')[-1].replace('_', ' ') for name in preprocessor.get_feature_names_out()]
         X_processed_df = pd.DataFrame(X_processed, columns=clean_names)
@@ -357,14 +358,20 @@ def get_shap_explanations(_pipeline, _df):
 
 def get_retention_strategies(employee_data):
     strategies = []
-    if isinstance(employee_data, pd.DataFrame): employee_data = employee_data.iloc[0]
-    if 'satisfaction_level' in employee_data.index and employee_data['satisfaction_level'] <= 0.45: strategies.append("🗣️ Conduct 1-on-1 meeting to address dissatisfaction.")
+    if isinstance(employee_data, pd.DataFrame): 
+        employee_data = employee_data.iloc[0]
+    if 'satisfaction_level' in employee_data.index and employee_data['satisfaction_level'] <= 0.45: 
+        strategies.append("🗣️ Conduct 1-on-1 meeting to address dissatisfaction.")
     if 'number_project' in employee_data.index:
-        if employee_data['number_project'] <= 2: strategies.append("📈 Discuss career aspirations and assign challenging work.")
-        if employee_data['number_project'] >= 6: strategies.append("⚠️ Assess workload immediately to prevent burnout.")
+        if employee_data['number_project'] <= 2: 
+            strategies.append("📈 Discuss career aspirations and assign challenging work.")
+        if employee_data['number_project'] >= 6: 
+            strategies.append("⚠️ Assess workload immediately to prevent burnout.")
     if 'time_spend_company' in employee_data.index and 'promotion_last_5years' in employee_data.index:
-        if employee_data['time_spend_company'] >= 4 and employee_data['promotion_last_5years'] == 0: strategies.append("📊 Develop clear career path and promotion timeline.")
-    if not strategies: strategies.append("✅ Employee seems stable. Monitor standard engagement metrics.")
+        if employee_data['time_spend_company'] >= 4 and employee_data['promotion_last_5years'] == 0: 
+            strategies.append("📊 Develop clear career path and promotion timeline.")
+    if not strategies: 
+        strategies.append("✅ Employee seems stable. Monitor standard engagement metrics.")
     return strategies
 
 # ====================================================================
@@ -375,8 +382,10 @@ def main():
     warnings.simplefilter(action='ignore', category=FutureWarning)
 
     # Initialize Session States
-    if 'currency_symbol' not in st.session_state: st.session_state['currency_symbol'] = '₹'
-    if 'currency_mult' not in st.session_state: st.session_state['currency_mult'] = 1.0
+    if 'currency_symbol' not in st.session_state: 
+        st.session_state['currency_symbol'] = '₹'
+    if 'currency_mult' not in st.session_state: 
+        st.session_state['currency_mult'] = 1.0
 
     # ====================================================================
     # CROSS-PAGE NAVIGATION HANDLER
@@ -411,7 +420,8 @@ def main():
             
             df = pd.read_csv('HR_comma_sep.csv')
             df_train = df.drop_duplicates().reset_index(drop=True)
-            X = df_train.drop('left', axis=1); y = df_train['left']
+            X = df_train.drop('left', axis=1)
+            y = df_train['left']
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
             
             categorical_features = X.select_dtypes(include=['object']).columns.tolist()
@@ -421,9 +431,17 @@ def main():
                 ('num', 'passthrough', numerical_features),
                 ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_features)])
             
-            best_params = {'n_estimators': 150, 'learning_rate': 0.05, 'num_leaves': 12, 'max_depth': 4, 'min_child_samples': 40, 'reg_alpha': 0.5, 'reg_lambda': 0.5, 'subsample': 0.8, 'colsample_bytree': 0.8, 'random_state': 42, 'verbose': -1, 'scale_pos_weight': 1.5}
+            best_params = {
+                'n_estimators': 150, 'learning_rate': 0.05, 'num_leaves': 12, 
+                'max_depth': 4, 'min_child_samples': 40, 'reg_alpha': 0.5, 
+                'reg_lambda': 0.5, 'subsample': 0.8, 'colsample_bytree': 0.8, 
+                'random_state': 42, 'verbose': -1, 'scale_pos_weight': 1.5
+            }
             
-            final_pipeline = Pipeline(steps=[('preprocessor', preprocessor), ('classifier', lgb.LGBMClassifier(**best_params))])
+            final_pipeline = Pipeline(steps=[
+                ('preprocessor', preprocessor), 
+                ('classifier', lgb.LGBMClassifier(**best_params))
+            ])
             final_pipeline.fit(X_train, y_train)
             
             return final_pipeline, df, X_train, X_test, y_train, y_test, preprocessor, categorical_features, numerical_features
@@ -445,14 +463,26 @@ def main():
         """, unsafe_allow_html=True)
         
         page = option_menu(
-            menu_title=None, options=menu_options,
+            menu_title=None, 
+            options=menu_options,
             icons=['gear', 'speedometer2', "cpu", 'cash-stack', 'robot'], 
-            menu_icon="cast", default_index=default_idx, 
-            styles={"container": {"padding": "0!important", "background-color": 'transparent'}, "icon": {"color": "#17B794", "font-size": "18px"}, "nav-link": {"color": "#c9d1d9", "font-size": "15px", "text-align": "left", "margin": "0px", "margin-bottom": "8px"}, "nav-link-selected": {"background-color": "#21262d", "border-radius": "8px", "color": "#17B794"}}
+            menu_icon="cast", 
+            default_index=default_idx, 
+            styles={
+                "container": {"padding": "0!important", "background-color": 'transparent'}, 
+                "icon": {"color": "#17B794", "font-size": "18px"}, 
+                "nav-link": {"color": "#c9d1d9", "font-size": "15px", "text-align": "left", "margin": "0px", "margin-bottom": "8px"}, 
+                "nav-link-selected": {"background-color": "#21262d", "border-radius": "8px", "color": "#17B794"}
+            }
         )
         
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("<div style='text-align:center; padding:20px; border-top:1px solid #2d333b;'><div style='font-size:0.85rem; color:#8b949e;'>Built by</div><div style='font-size:1.4rem; font-weight:600; color:#00E5A8; margin-bottom:10px;'>Nisarg Rathod</div></div>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='text-align:center; padding:20px; border-top:1px solid #2d333b;'>
+            <div style='font-size:0.85rem; color:#8b949e;'>Built by</div>
+            <div style='font-size:1.4rem; font-weight:600; color:#00E5A8; margin-bottom:10px;'>Nisarg Rathod</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # ====================================================================
     # PAGE 1: GLOBAL SETUP
@@ -465,7 +495,12 @@ def main():
         with c1:
             st.markdown("### 🌍 Localization")
             currency_opt = st.selectbox("Select Currency", ["₹ INR (Rupee)", "$ USD (Dollar)", "€ EUR (Euro)", "£ GBP (Pound)"])
-            curr_map = {"₹ INR (Rupee)": ("₹", 1.0), "$ USD (Dollar)": ("$", 0.012), "€ EUR (Euro)": ("€", 0.011), "£ GBP (Pound)": ("£", 0.0095)}
+            curr_map = {
+                "₹ INR (Rupee)": ("₹", 1.0), 
+                "$ USD (Dollar)": ("$", 0.012), 
+                "€ EUR (Euro)": ("€", 0.011), 
+                "£ GBP (Pound)": ("£", 0.0095)
+            }
             st.session_state['currency_symbol'], st.session_state['currency_mult'] = curr_map[currency_opt]
             st.success(f"Currency set to {currency_opt}")
             
@@ -485,35 +520,49 @@ def main():
                     with st.spinner("🤖 Training on your data..."):
                         y = new_df[target_col].apply(lambda x: 1 if x == left_value else 0)
                         X = new_df.drop(target_col, axis=1)
-                        valid_idx = X.dropna().index; X_clean = X.loc[valid_idx]; y_clean = y.loc[valid_idx]
+                        valid_idx = X.dropna().index
+                        X_clean = X.loc[valid_idx]
+                        y_clean = y.loc[valid_idx]
                         
                         categorical_auto = X_clean.select_dtypes(include=['object', 'category']).columns.tolist()
                         numerical_auto = X_clean.select_dtypes(include=np.number).columns.tolist()
                         
                         preprocessor_global = ColumnTransformer(transformers=[
                             ('num', 'passthrough', numerical_auto), 
-                            ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_auto)])
+                            ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_auto)
+                        ])
                         
                         X_train_g, X_test_g, y_train_g, y_test_g = train_test_split(X_clean, y_clean, test_size=0.2, random_state=42)
                         spw = min((y_train_g == 0).sum() / (y_train_g == 1).sum(), 2.0) if (y_train_g == 1).sum() > 0 else 1.0
                         
-                        global_pipeline = Pipeline(steps=[('preprocessor', preprocessor_global), ('classifier', lgb.LGBMClassifier(n_estimators=150, learning_rate=0.05, num_leaves=12, max_depth=4, random_state=42, verbose=-1, scale_pos_weight=spw))])
+                        global_pipeline = Pipeline(steps=[
+                            ('preprocessor', preprocessor_global), 
+                            ('classifier', lgb.LGBMClassifier(n_estimators=150, learning_rate=0.05, num_leaves=12, max_depth=4, random_state=42, verbose=-1, scale_pos_weight=spw))
+                        ])
                         global_pipeline.fit(X_train_g, y_train_g)
                         acc = accuracy_score(y_test_g, global_pipeline.predict(X_test_g))
                         
-                        final_df = new_df.loc[valid_idx].copy(); final_df['left'] = y_clean
-                        st.session_state['global_pipeline'] = global_pipeline; st.session_state['global_df'] = final_df
-                        st.session_state['global_X_train'] = X_train_g; st.session_state['global_X_test'] = X_test_g
-                        st.session_state['global_y_train'] = y_train_g; st.session_state['global_y_test'] = y_test_g
-                        st.session_state['global_cat_feat'] = categorical_auto; st.session_state['global_num_feat'] = numerical_auto
+                        final_df = new_df.loc[valid_idx].copy()
+                        final_df['left'] = y_clean
+                        st.session_state['global_pipeline'] = global_pipeline
+                        st.session_state['global_df'] = final_df
+                        st.session_state['global_X_train'] = X_train_g
+                        st.session_state['global_X_test'] = X_test_g
+                        st.session_state['global_y_train'] = y_train_g
+                        st.session_state['global_y_test'] = y_test_g
+                        st.session_state['global_cat_feat'] = categorical_auto
+                        st.session_state['global_num_feat'] = numerical_auto
                         st.session_state['is_global'] = True
+                        
                         st.success(f"🎉 Training Complete! Accuracy: {acc:.1%}.")
                         st.session_state['nav_to'] = '📊 Executive Dashboard'
                         st.rerun()
-            except Exception as e: st.error(f"Error: {e}")
+            except Exception as e: 
+                st.error(f"Error: {e}")
             
         if st.button("🔄 Reset to Default Demo Data"):
-            if 'is_global' in st.session_state: del st.session_state['is_global']
+            if 'is_global' in st.session_state: 
+                del st.session_state['is_global']
             st.rerun()
 
     # ====================================================================
@@ -526,13 +575,18 @@ def main():
         # --- ALERT SYSTEM ---
         alerts = []
         attrition_rate = (df['left'].sum() / len(df)) * 100
-        if attrition_rate > 20: alerts.append(("🚨 CRITICAL", f"Attrition rate is {attrition_rate:.1f}% (Threshold: 20%)"))
-        if 'satisfaction_level' in df.columns and df['satisfaction_level'].mean() < 0.5: alerts.append(("⚠️ WARNING", "Average satisfaction below 50%"))
-        if 'average_montly_hours' in df.columns and df['average_montly_hours'].mean() > 200: alerts.append(("⚠️ WARNING", "High average working hours (Burnout risk)"))
+        if attrition_rate > 20: 
+            alerts.append(("🚨 CRITICAL", f"Attrition rate is {attrition_rate:.1f}% (Threshold: 20%)"))
+        if 'satisfaction_level' in df.columns and df['satisfaction_level'].mean() < 0.5: 
+            alerts.append(("⚠️ WARNING", "Average satisfaction below 50%"))
+        if 'average_montly_hours' in df.columns and df['average_montly_hours'].mean() > 200: 
+            alerts.append(("⚠️ WARNING", "High average working hours (Burnout risk)"))
         
         for level, msg in alerts:
-            if "CRITICAL" in level: st.error(msg)
-            else: st.warning(msg)
+            if "CRITICAL" in level: 
+                st.error(msg)
+            else: 
+                st.warning(msg)
         
         # --- METRICS ---
         c1, c2, c3 = st.columns(3)
@@ -544,10 +598,26 @@ def main():
         st.markdown("---")
         st.markdown("### ⚡ Quick Actions")
         c1, c2, c3, c4 = st.columns(4)
-        with c1: if st.button("🎯 Predict Employee", use_container_width=True): st.session_state['nav_to'] = '🔮 Predict & Prevent'; st.rerun()
-        with c2: if st.button("💰 Budget Planner", use_container_width=True): st.session_state['nav_to'] = '💰 Business Case'; st.rerun()
-        with c3: if st.button("📧 Draft Email", use_container_width=True): st.session_state['nav_to'] = '🧠 AI Tools'; st.rerun()
-        with c4: if st.button("🚀 6-Month Plan", use_container_width=True): st.session_state['nav_to'] = '💰 Business Case'; st.rerun()
+        
+        with c1:
+            if st.button("🎯 Predict Employee", use_container_width=True):
+                st.session_state['nav_to'] = '🔮 Predict & Prevent'
+                st.rerun()
+        
+        with c2:
+            if st.button("💰 Budget Planner", use_container_width=True):
+                st.session_state['nav_to'] = '💰 Business Case'
+                st.rerun()
+                
+        with c3:
+            if st.button("📧 Draft Email", use_container_width=True):
+                st.session_state['nav_to'] = '🧠 AI Tools'
+                st.rerun()
+                
+        with c4:
+            if st.button("🚀 6-Month Plan", use_container_width=True):
+                st.session_state['nav_to'] = '💰 Business Case'
+                st.rerun()
         
         # --- AT RISK EMPLOYEES ---
         st.markdown("---")
@@ -566,9 +636,12 @@ def main():
                 dept = row.get('Department', 'N/A')
                 salary = row.get('salary', 'N/A')
                 color = "#FF4B4B" if risk_pct > 70 else "#EEB76B" if risk_pct > 50 else "#17B794"
-                st.markdown(f"<div style='background:{color}15; border-left:4px solid {color}; padding:10px 15px; margin:5px 0; border-radius:0 8px 8px 0; display:flex; justify-content:space-between;'>"
-                           f"<span><strong>{dept}</strong> | {salary.title()} Salary</span>"
-                           f"<span style='color:{color}; font-weight:700;'>Risk: {risk_pct:.1f}%</span></div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='background:{color}15; border-left:4px solid {color}; padding:10px 15px; margin:5px 0; border-radius:0 8px 8px 0; display:flex; justify-content:space-between;'>"
+                    f"<span><strong>{dept}</strong> | {salary.title()} Salary</span>"
+                    f"<span style='color:{color}; font-weight:700;'>Risk: {risk_pct:.1f}%</span></div>", 
+                    unsafe_allow_html=True
+                )
         else:
             st.info("No current employees in dataset.")
             
@@ -607,8 +680,11 @@ def main():
                     cols = st.columns(2)
                     for i, col in enumerate(feature_columns):
                         with cols[i%2]:
-                            if df[col].dtype == 'object': input_data[col] = st.selectbox(col.title(), df[col].unique())
-                            else: input_data[col] = st.slider(col.title(), float(df[col].min()), float(df[col].max()), float(df[col].mean()))
+                            if df[col].dtype == 'object': 
+                                input_data[col] = st.selectbox(col.title(), df[col].unique())
+                            else: 
+                                input_data[col] = st.slider(col.title(), float(df[col].min()), float(df[col].max()), float(df[col].mean()))
+                                
                 predict_button = st.form_submit_button('🔮 Analyze Employee', type='primary')
 
             if predict_button:
@@ -625,22 +701,27 @@ def main():
                 highlight_class = "highlight-leave" if prediction == 1 else "highlight-stay"
                 indicator_class = "indicator-leave" if prediction == 1 else "indicator-stay"
                 
-                st.markdown(f"""<div class="prediction-card {highlight_class}">
-                    <div class="card-section card-section-first"><div class="card-label">Prediction</div><div class="card-result {result_class}">{result_text}</div></div>
-                    <div class="card-section"><div class="card-label">Stay Prob.</div><div class="card-percentage percentage-stay">{stay_percent}%</div><div class="card-indicator indicator-stay"></div></div>
-                    <div class="card-section"><div class="card-label">Leave Prob.</div><div class="card-percentage percentage-leave">{leave_percent}%</div><div class="card-indicator {indicator_class}"></div></div>
-                </div>""", unsafe_allow_html=True)
+                st.markdown(
+                    f"""<div class="prediction-card {highlight_class}">
+                        <div class="card-section card-section-first"><div class="card-label">Prediction</div><div class="card-result {result_class}">{result_text}</div></div>
+                        <div class="card-section"><div class="card-label">Stay Prob.</div><div class="card-percentage percentage-stay">{stay_percent}%</div><div class="card-indicator indicator-stay"></div></div>
+                        <div class="card-section"><div class="card-label">Leave Prob.</div><div class="card-percentage percentage-leave">{leave_percent}%</div><div class="card-indicator {indicator_class}"></div></div>
+                    </div>""", 
+                    unsafe_allow_html=True
+                )
                 
                 if prediction == 1:
                     st.markdown("### 💡 Immediate Actions")
-                    for rec in get_retention_strategies(input_df): st.info(rec)
+                    for rec in get_retention_strategies(input_df): 
+                        st.info(rec)
                     
                     st.markdown("### 🔮 AI Retention Strategies (What-If)")
                     if st.button("💡 Show Me How to Keep Them", type="primary"):
                         with st.spinner("Simulating strategies..."):
                             try:
                                 continuous_features = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
-                                if len(continuous_features) < 2: st.warning("Not enough features for simulation.")
+                                if len(continuous_features) < 2: 
+                                    st.warning("Not enough features for simulation.")
                                 else:
                                     d = dice_ml.Data(dataframe=df, continuous_features=continuous_features, outcome_name='left')
                                     m = dice_ml.Model(model=pipeline, backend='sklearn')
@@ -658,16 +739,21 @@ def main():
                                                 changes.append(f"• Adjust <strong>{col.title()}</strong> from {orig_val:.2f} to {new_val:.2f}")
                                             elif orig_val != new_val:
                                                 changes.append(f"• Change <strong>{col.title()}</strong> to {new_val}")
-                                        if not changes: changes.append("• Minor supervision required")
+                                        if not changes: 
+                                            changes.append("• Minor supervision required")
                                         html_str = "".join([f"<div class='action-item'>{c}</div>" for c in changes])
                                         with cols_s[i]:
-                                            st.markdown(f"<div class='custom-card' style='border-color: #17B794;'><h4 style='color: #17B794; margin-top:0;'>Strategy {i+1}</h4>{html_str}</div>", unsafe_allow_html=True)
+                                            st.markdown(
+                                                f"<div class='custom-card' style='border-color: #17B794;'><h4 style='color: #17B794; margin-top:0;'>Strategy {i+1}</h4>{html_str}</div>", 
+                                                unsafe_allow_html=True
+                                            )
                             except Exception as e:
                                 st.error(f"Could not generate strategies: {e}")
                                 
                     st.markdown("---")
                     if st.button("📧 Draft Retention Email for This Person", use_container_width=True):
-                        st.session_state['nav_to'] = '🧠 AI Tools'; st.rerun()
+                        st.session_state['nav_to'] = '🧠 AI Tools'
+                        st.rerun()
 
         with tab2:
             st.markdown("### 📦 Batch Prediction")
@@ -693,19 +779,31 @@ def main():
             st.markdown("### 🔧 Technical Deep Dive (SHAP Insights)")
             shap_values, X_processed_df = get_shap_explanations(pipeline, df)
             if shap_values is not None:
-                if isinstance(shap_values, list): vals = np.abs(shap_values[1]).mean(0)
-                else: vals = np.abs(shap_values).mean(0)
+                if isinstance(shap_values, list): 
+                    vals = np.abs(shap_values[1]).mean(0)
+                else: 
+                    vals = np.abs(shap_values).mean(0)
                 
                 feature_importance = pd.DataFrame(list(zip(X_processed_df.columns, vals)), columns=['Feature','Importance']).sort_values('Importance', ascending=False)
                 top_3 = feature_importance.head(3)
                 c1, c2, c3 = st.columns(3)
                 for idx, (_, row) in enumerate(top_3.iterrows()):
                     with [c1, c2, c3][idx]:
-                        st.markdown(f"<div class='custom-card' style='text-align:center;'><h3 style='color: #17B794; margin-top:0;'>{row['Feature'].title()}</h3><p style='color: #c9d1d9;'>Top Driver #{idx+1}</p></div>", unsafe_allow_html=True)
+                        st.markdown(
+                            f"<div class='custom-card' style='text-align:center;'><h3 style='color: #17B794; margin-top:0;'>{row['Feature'].title()}</h3><p style='color: #c9d1d9;'>Top Driver #{idx+1}</p></div>", 
+                            unsafe_allow_html=True
+                        )
                 
                 with st.expander("View SHAP Plots"):
-                    fig1, ax1 = plt.subplots(); shap.summary_plot(shap_values, X_processed_df, plot_type="bar", show=False); st.pyplot(fig1); plt.close(fig1)
-                    fig2, ax2 = plt.subplots(); shap.summary_plot(shap_values, X_processed_df, show=False); st.pyplot(fig2); plt.close(fig2)
+                    fig1, ax1 = plt.subplots()
+                    shap.summary_plot(shap_values, X_processed_df, plot_type="bar", show=False)
+                    st.pyplot(fig1)
+                    plt.close(fig1)
+                    
+                    fig2, ax2 = plt.subplots()
+                    shap.summary_plot(shap_values, X_processed_df, show=False)
+                    st.pyplot(fig2)
+                    plt.close(fig2)
 
     # ====================================================================
     # PAGE 4: BUSINESS CASE
@@ -717,7 +815,12 @@ def main():
             st.markdown("<h1 style='margin-bottom: 5px;'>Budget Planner</h1>", unsafe_allow_html=True)
             
             # PHASE 1: BURN RATE
-            st.markdown("""<div class="custom-card" style="border-left: 5px solid #FF4B4B;"><h3 style="color: #FF4B4B; margin-top: 0;">💸 Phase 1: The Burn Rate</h3><p style='color: #e6edf3;'>Translating attrition into hard numbers.</p></div>""", unsafe_allow_html=True)
+            st.markdown(
+                """<div class="custom-card" style="border-left: 5px solid #FF4B4B;">
+                <h3 style="color: #FF4B4B; margin-top: 0;">💸 Phase 1: The Burn Rate</h3>
+                <p style='color: #e6edf3;'>Translating attrition into hard numbers.</p></div>""", 
+                unsafe_allow_html=True
+            )
             
             if 'Department' in df.columns and 'salary' in df.columns:
                 salary_map = get_salary_map()
@@ -730,7 +833,11 @@ def main():
                 else:
                     df_left['total_cost'] = df_left['annual_salary'] * 0.75
                     
-                dept_costs = df_left.groupby('Department').agg(employees_left=('left', 'count'), total_cost=('total_cost', 'sum')).reset_index().sort_values('total_cost', ascending=False)
+                dept_costs = df_left.groupby('Department').agg(
+                    employees_left=('left', 'count'), 
+                    total_cost=('total_cost', 'sum')
+                ).reset_index().sort_values('total_cost', ascending=False)
+                
                 grand_total = dept_costs['total_cost'].sum()
                 
                 c1, c2, c3 = st.columns(3)
@@ -738,23 +845,35 @@ def main():
                 c2.metric("Avg Cost Per Exit", format_money(grand_total/len(df_left)))
                 c3.metric("Most Expensive Dept", dept_costs.iloc[0]['Department'], delta=format_money(dept_costs.iloc[0]['total_cost'])+" Lost", delta_color="inverse")
                 
-                fig_cost = px.bar(dept_costs, x='Department', y='total_cost', title="Cost by Department", template="plotly_dark", color='total_cost', color_continuous_scale=['#17B794', '#FF4B4B'])
+                fig_cost = px.bar(
+                    dept_costs, x='Department', y='total_cost', title="Cost by Department", 
+                    template="plotly_dark", color='total_cost', color_continuous_scale=['#17B794', '#FF4B4B']
+                )
                 fig_cost.update_layout(yaxis_title="Loss", showlegend=False)
                 custome_layout(fig_cost)
                 st.plotly_chart(fig_cost, use_container_width=True)
 
             # PHASE 2: OPTIMIZER
-            st.markdown("""<div class="custom-card" style="border-left: 5px solid #17B794;"><h3 style="color: #17B794; margin-top: 0;">🛡️ Phase 2: ROI Optimizer</h3><p style='color: #e6edf3;'>Who should we save with limited budget?</p></div>""", unsafe_allow_html=True)
+            st.markdown(
+                """<div class="custom-card" style="border-left: 5px solid #17B794;">
+                <h3 style="color: #17B794; margin-top: 0;">🛡️ Phase 2: ROI Optimizer</h3>
+                <p style='color: #e6edf3;'>Who should we save with limited budget?</p></div>""", 
+                unsafe_allow_html=True
+            )
             
             col1, col2 = st.columns([2, 1])
-            with col1: budget = st.number_input("Enter Retention Budget", min_value=100000, max_value=100000000, value=1000000, step=50000, format="%d")
-            with col2: st.write("<br>", unsafe_allow_html=True); optimize_btn = st.button("🚀 Run Optimizer", type="primary")
+            with col1: 
+                budget = st.number_input("Enter Retention Budget", min_value=100000, max_value=100000000, value=1000000, step=50000, format="%d")
+            with col2: 
+                st.write("<br>", unsafe_allow_html=True)
+                optimize_btn = st.button("🚀 Run Optimizer", type="primary")
             
             if optimize_btn:
                 with st.spinner("🧮 Running Optimization..."):
                     X = df.drop('left', axis=1)
                     probas = calibrate_probability_array(pipeline.predict_proba(X)[:, 1])
-                    opt_df = df.copy(); opt_df['risk'] = probas
+                    opt_df = df.copy()
+                    opt_df['risk'] = probas
                     high_risk_df = opt_df[opt_df['risk'] > 0.5].copy()
                     
                     if len(high_risk_df) > 0:
@@ -766,7 +885,11 @@ def main():
                         
                         if len(candidates) > 0:
                             n = len(candidates)
-                            res = milp(c=-candidates['net_savings'].values, constraints=LinearConstraint(np.array([candidates['cost_to_retain'].values]), lb=-np.inf, ub=budget), integrality=np.ones(n))
+                            res = milp(
+                                c=-candidates['net_savings'].values, 
+                                constraints=LinearConstraint(np.array([candidates['cost_to_retain'].values]), lb=-np.inf, ub=budget), 
+                                integrality=np.ones(n)
+                            )
                             if res.success:
                                 selected = candidates.iloc[np.where(res.x == 1)[0]]
                                 st.success("✅ Optimization Complete!")
@@ -775,16 +898,22 @@ def main():
                                 m2.metric("Projected Savings", format_money(selected['net_savings'].sum()))
                                 m3.metric("Lives Saved", f"{len(selected)} People")
                                 st.dataframe(selected[['Department', 'salary', 'risk', 'cost_to_retain', 'net_savings']])
-                            else: st.error("❌ Budget too low to save anyone.")
-                        else: st.warning("No high-ROI candidates found.")
-                    else: st.success("🎉 Workforce is highly stable.")
+                            else: 
+                                st.error("❌ Budget too low to save anyone.")
+                        else: 
+                            st.warning("No high-ROI candidates found.")
+                    else: 
+                        st.success("🎉 Workforce is highly stable.")
 
         with tab_roadmap:
             st.header("🚀 Strategic Roadmap & Projections")
             issues = []
-            if 'satisfaction_level' in df.columns and df['satisfaction_level'].mean() < 0.6: issues.append("Low Employee Satisfaction")
-            if 'average_montly_hours' in df.columns and df['average_montly_hours'].mean() > 200: issues.append("Employee Burnout")
-            if not issues: issues.append("Standard Workforce Stabilization")
+            if 'satisfaction_level' in df.columns and df['satisfaction_level'].mean() < 0.6: 
+                issues.append("Low Employee Satisfaction")
+            if 'average_montly_hours' in df.columns and df['average_montly_hours'].mean() > 200: 
+                issues.append("Employee Burnout")
+            if not issues: 
+                issues.append("Standard Workforce Stabilization")
             
             if st.button("✍️ Draft 6-Month HR Action Plan", type="primary"):
                 with st.spinner("Drafting strategy..."):
@@ -794,27 +923,38 @@ def main():
                             llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.5)
                             chain = PromptTemplate.from_template("You are an HR Strategist. Issues: {issues}. Create a 6-month roadmap with phases, actions, and metrics. Plain English.") | llm | StrOutputParser()
                             st.markdown(f"<div class='llm-response'>{chain.invoke({'issues': ', '.join(issues)})}</div>", unsafe_allow_html=True)
-                        else: st.warning("API Key missing.")
-                    except Exception as e: st.error(f"Error: {e}")
+                        else: 
+                            st.warning("API Key missing.")
+                    except Exception as e: 
+                        st.error(f"Error: {e}")
             
             st.markdown("---")
             st.markdown("### 📈 12-Month Projection")
             c1, c2 = st.columns(2)
-            with c1: eff = st.slider("Intervention Efficacy (%)", 10, 50, 20, 5)
-            with c2: nat = st.slider("Natural Attrition (%)", 0.5, 2.0, 1.0, 0.1)
+            with c1: 
+                eff = st.slider("Intervention Efficacy (%)", 10, 50, 20, 5)
+            with c2: 
+                nat = st.slider("Natural Attrition (%)", 0.5, 2.0, 1.0, 0.1)
             
             if st.button("📈 Show Projection"):
-                months = list(range(1, 13)); curr = len(df)
+                months = list(range(1, 13))
+                curr = len(df)
                 total_risk = calibrate_probability_array(pipeline.predict_proba(df.drop('left', axis=1))[:, 1]).sum()
-                m_no = total_risk / 12.0; m_yes = m_no * (1 - (eff/100.0))
+                m_no = total_risk / 12.0
+                m_yes = m_no * (1 - (eff/100.0))
                 f_bau, f_int, t_bau, t_int = [], [], float(curr), float(curr)
                 
                 for m in months:
-                    t_bau -= m_no + t_bau*(nat/100); t_int -= m_yes + t_int*(nat/100)
-                    f_bau.append(t_bau); f_int.append(t_int)
+                    t_bau -= m_no + t_bau*(nat/100)
+                    t_int -= m_yes + t_int*(nat/100)
+                    f_bau.append(t_bau)
+                    f_int.append(t_int)
                     
                 plot_df = pd.DataFrame({'Month': months, 'Do Nothing': f_bau, 'Follow Plan': f_int}).melt(id_vars='Month', var_name='Scenario', value_name='Headcount')
-                fig = px.line(plot_df, x='Month', y='Headcount', color='Scenario', template="plotly_dark", markers=True, color_discrete_map={'Do Nothing': "#EEB76B", 'Follow Plan': "#17B794"})
+                fig = px.line(
+                    plot_df, x='Month', y='Headcount', color='Scenario', template="plotly_dark", markers=True, 
+                    color_discrete_map={'Do Nothing': "#EEB76B", 'Follow Plan': "#17B794"}
+                )
                 st.plotly_chart(fig, use_container_width=True)
                 
                 saved = int(f_int[-1] - f_bau[-1])
@@ -836,6 +976,7 @@ def main():
                 with c2:
                     situation = st.selectbox("Situation", ["Overworked", "Seeking Salary", "Low Morale", "No Growth"])
                     solution = st.selectbox("Solution", ["Flexible Hours", "Salary Review", "Role Change", "Wellness Session"])
+                    
                 if st.form_submit_button("🚀 Generate Email"):
                     with st.spinner("Drafting..."):
                         try:
@@ -844,30 +985,46 @@ def main():
                                 llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.7)
                                 chain = PromptTemplate.from_template("Write a polite HR email to {emp_name} in {emp_dept}. Situation: {situation}. Solution: {solution}. Tone: Professional.") | llm | StrOutputParser()
                                 st.markdown(f"<div class='llm-response'>{chain.invoke({'emp_name': emp_name, 'emp_dept': emp_dept, 'situation': situation, 'solution': solution})}</div>", unsafe_allow_html=True)
-                            else: st.warning("API Key missing.")
-                        except Exception as e: st.error(f"Error: {e}")
+                            else: 
+                                st.warning("API Key missing.")
+                        except Exception as e: 
+                            st.error(f"Error: {e}")
 
         with tab2:
             st.header("⚙️ Model Benchmarking")
             if st.button("Run Benchmark"):
                 with st.spinner("Training models..."):
-                    y_pred_lgbm = pipeline.predict(X_test_cur); proba_lgbm = pipeline.predict_proba(X_test_cur)[:, 1]
-                    rf = Pipeline([('p', preprocessor), ('c', RandomForestClassifier(random_state=42))]); rf.fit(X_train_ref, y_train)
-                    lr = Pipeline([('p', preprocessor), ('c', LogisticRegression(max_iter=1000))]); lr.fit(X_train_ref, y_train)
+                    y_pred_lgbm = pipeline.predict(X_test_cur)
+                    proba_lgbm = pipeline.predict_proba(X_test_cur)[:, 1]
+                    
+                    rf = Pipeline([('p', preprocessor), ('c', RandomForestClassifier(random_state=42))])
+                    rf.fit(X_train_ref, y_train)
+                    
+                    lr = Pipeline([('p', preprocessor), ('c', LogisticRegression(max_iter=1000))])
+                    lr.fit(X_train_ref, y_train)
                     
                     metrics = pd.DataFrame({
                         'Model': ['LightGBM', 'Random Forest', 'Logistic Regression'],
-                        'Accuracy': [accuracy_score(y_test, y_pred_lgbm), accuracy_score(y_test, rf.predict(X_test_cur)), accuracy_score(y_test, lr.predict(X_test_cur))],
-                        'ROC AUC': [roc_auc_score(y_test, proba_lgbm), roc_auc_score(y_test, rf.predict_proba(X_test_cur)[:,1]), roc_auc_score(y_test, lr.predict_proba(X_test_cur)[:,1])]
+                        'Accuracy': [
+                            accuracy_score(y_test, y_pred_lgbm), 
+                            accuracy_score(y_test, rf.predict(X_test_cur)), 
+                            accuracy_score(y_test, lr.predict(X_test_cur))
+                        ],
+                        'ROC AUC': [
+                            roc_auc_score(y_test, proba_lgbm), 
+                            roc_auc_score(y_test, rf.predict_proba(X_test_cur)[:,1]), 
+                            roc_auc_score(y_test, lr.predict_proba(X_test_cur)[:,1])
+                        ]
                     })
                     st.dataframe(metrics.style.highlight_max(axis=0, color='#17B794'))
                     st.success("🏆 LightGBM selected for production.")
 
         with tab3:
             st.header("🔬 Departmental Strategy Deep Dive")
-            if 'Department' not in df.columns: st.warning("Department column missing.")
+            if 'Department' not in df.columns: 
+                st.warning("Department column missing.")
             else:
-                dept = st.selectbox("Select Dept", sorted(df['Department'].unique()))
+                dept = st.selectbox("Select Dept", sorted(df['Department'].unique()), key="dept_strategy")
                 if st.button("Generate Strategy"):
                     shap_vals, X_proc_df = get_shap_explanations(pipeline, df)
                     if shap_vals is not None:
@@ -882,12 +1039,19 @@ def main():
                                 
                                 for i, (_, row) in enumerate(imp.head(3).iterrows()):
                                     st.info(f"Driver #{i+1}: {row['Feature'].title()}")
-                            else: st.warning("Not enough data.")
-                        else: st.error(f"Could not map {dept}.")
+                            else: 
+                                st.warning("Not enough data.")
+                        else: 
+                            st.error(f"Could not map {dept}.")
 
         with tab4:
             st.header("🛡️ AI Disruption Defense & Fairness")
-            st.markdown("""<div class="custom-card" style="border-left: 5px solid #9ca3ca;"><h4 style="color: #9ca3ca; margin-top: 0;">🧠 The 'Proof of Work' Defense</h4><p style='color: #c9d1d9;'>"AI replaces tasks, not jobs. Reskilling 50 people is cheaper than laying off 200."</p></div>""", unsafe_allow_html=True)
+            st.markdown(
+                """<div class="custom-card" style="border-left: 5px solid #9ca3ca;">
+                <h4 style="color: #9ca3ca; margin-top: 0;">🧠 The 'Proof of Work' Defense</h4>
+                <p style='color: #c9d1d9;'>"AI replaces tasks, not jobs. Reskilling 50 people is cheaper than laying off 200."</p></div>""", 
+                unsafe_allow_html=True
+            )
             
             # Bias Check
             st.markdown("### ⚖️ Fairness & Bias Check")
@@ -898,8 +1062,10 @@ def main():
                 low_risk = current_df[current_df['salary']=='low']['risk'].mean()
                 high_risk = current_df[current_df['salary']=='high']['risk'].mean()
                 ratio = low_risk / high_risk if high_risk > 0 else 0
-                if ratio > 1.5: st.warning(f"⚠️ Potential Bias: Low-salary employees are {ratio:.1f}x more likely to be flagged.")
-                else: st.success("✅ No significant bias detected across salary bands.")
+                if ratio > 1.5: 
+                    st.warning(f"⚠️ Potential Bias: Low-salary employees are {ratio:.1f}x more likely to be flagged.")
+                else: 
+                    st.success("✅ No significant bias detected across salary bands.")
                 
             # Reskill Calculator
             st.markdown("### 🧮 Reskill vs Layoff Calculator")
@@ -914,7 +1080,8 @@ def main():
             c1, c2, c3 = st.columns(3)
             c1.metric("Layoff Cost", format_money(layoff_cost))
             c2.metric("Reskill Cost", format_money(reskill_cost))
-            c3.metric("Savings", format_money(savings), delta="Reskill wins" if savings > 0 else "Layoff cheaper")
+            delta_text = "Reskill wins" if savings > 0 else "Layoff cheaper"
+            c3.metric("Savings", format_money(savings), delta=delta_text)
 
 if __name__ == "__main__":
     main()
