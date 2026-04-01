@@ -1280,50 +1280,6 @@ def main():
                         if "rate_limit" in str(e).lower() or "429" in str(e): st.warning("⏳ **AI is busy right now.** Please wait 30 seconds and try again.")
                         else: st.error(f"❌ Error generating memo: {e}")
 
-        with tab4:
-            st.subheader("📊 Retention Priority Matrix")
-            X_all = df.drop('left', axis=1); raw_risk_probs = pipeline.predict_proba(X_all)[:, 1]; risk_probs = calibrate_probability_array(raw_risk_probs, temperature=0.55)
-            if 'salary' in df.columns: replacement_costs = df['salary'].map({'low': 400000, 'medium': 600000, 'high': 900000}) * 0.5 
-            else: replacement_costs = pd.Series([500000]*len(df))
-            plot_data = pd.DataFrame({'Employee_ID': df.index, 'Risk_Probability': risk_probs, 'Replacement_Cost': replacement_costs})
-            if 'Department' in df.columns: plot_data['Department'] = df['Department']
-            risk_threshold = 0.5; cost_threshold = replacement_costs.median()
-            def get_zone(row):
-                if row['Risk_Probability'] >= risk_threshold and row['Replacement_Cost'] >= cost_threshold: return "🔴 Critical Zone (Save Now)"
-                elif row['Risk_Probability'] < risk_threshold and row['Replacement_Cost'] >= cost_threshold: return "🟡 Retain Zone (Keep Happy)"
-                elif row['Risk_Probability'] >= risk_threshold and row['Replacement_Cost'] < cost_threshold: return "🟢 Outplacement Zone (Let Go)"
-                else: return "⚪ Monitor Zone"
-            plot_data['Zone'] = plot_data.apply(get_zone, axis=1)
-            fig = px.scatter(plot_data, x='Risk_Probability', y='Replacement_Cost', color='Zone', color_discrete_map={"🔴 Critical Zone (Save Now)": "#FF4B4B", "🟡 Retain Zone (Keep Happy)": "#F59E0B", "🟢 Outplacement Zone (Let Go)": "#17B794", "⚪ Monitor Zone": "#9ca3af"}, title="Employee Prioritization Map", template="plotly_dark", labels={'Risk_Probability': 'Predicted Attrition Risk', 'Replacement_Cost': 'Est. Replacement Cost (₹)'}, height=600)
-            fig.add_hline(y=cost_threshold, line_dash="dash", line_color="white", opacity=0.3); fig.add_vline(x=risk_threshold, line_dash="dash", line_color="white", opacity=0.3)
-            st.plotly_chart(fig, use_container_width=True)
-            
-        with tab5:
-            st.subheader("🎯 The 'Ideal Candidate' Profiler")
-            if 'time_spend_company' in df.columns and 'last_evaluation' in df.columns: superstar_mask = (df['left'] == 0) & (df['time_spend_company'] > 4) & (df['last_evaluation'] > 0.8)
-            else: st.info("Dataset missing specific tenure/evaluation columns. Defining Superstars simply as top retained performers."); superstar_mask = (df['left'] == 0)
-            df_superstars = df[superstar_mask]; df_average = df[(df['left'] == 0) & (~superstar_mask)]
-            if len(df_superstars) < 5: st.warning("Not enough 'Superstar' data in this dataset to generate a reliable profile.")
-            else:
-                st.success(f"Analyzed {len(df_superstars)} Superstars vs {len(df_average)} Average Employees.")
-                metrics_to_compare = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
-                super_mean = df_superstars[metrics_to_compare].mean(); avg_mean = df_average[metrics_to_compare].mean()
-                diff_df = pd.DataFrame({'Metric': metrics_to_compare, 'Difference': (super_mean - avg_mean).values})
-                diff_df['Abs_Diff'] = diff_df['Difference'].abs(); top_3_diff = diff_df.nlargest(3, 'Abs_Diff')
-                col_dna1, col_dna2, col_dna3 = st.columns(3); cols = [col_dna1, col_dna2, col_dna3]
-                def get_dna_insight(metric, diff_val):
-                    if 'satisfaction' in metric.lower():
-                        if diff_val > 0: return "🟢 High Culture Fit", f"Superstars are {diff_val:.2f} points happier on average."
-                        else: return "🔴 Low Satisfaction", f"Unexpected: Superstars seem less satisfied."
-                    elif 'hours' in metric.lower():
-                        if diff_val < 0: return "🟢 Work-Life Balance", f"Superstars work {abs(diff_val):.0f} hrs LESS."
-                        else: return "🔴 High Workload", f"Superstars work harder."
-                    else: return "📊 " + metric.replace('_', ' ').title(), f"Difference of {diff_val:.2f}."
-                for i, col in enumerate(cols):
-                    if i < len(top_3_diff):
-                        row = top_3_diff.iloc[i]; title, text = get_dna_insight(row['Metric'], row['Difference'])
-                        with col: st.markdown(f"<div class='custom-card' style='text-align: center; border-top: 4px solid #17B794;'><h3 style='margin-top: 0;'>{title}</h3><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{text}</p></div>", unsafe_allow_html=True)
-
     # ====================================================================
     # Page: STRATEGIC ROADMAP
     # ====================================================================
