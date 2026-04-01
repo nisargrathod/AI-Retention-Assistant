@@ -241,12 +241,10 @@ st.markdown("""
         box-shadow: 0 0 10px rgba(238, 183, 107, 0.5);
     }
     
-    /* First section special styling */
     .card-section-first {
         background: linear-gradient(135deg, #1c2128 0%, #21262d 100%);
     }
     
-    /* Highlight section based on result */
     .highlight-leave .card-section-first {
         background: linear-gradient(135deg, #2d2515 0%, #1c2128 100%);
     }
@@ -254,6 +252,158 @@ st.markdown("""
     .highlight-stay .card-section-first {
         background: linear-gradient(135deg, #0d2818 0%, #1c2128 100%);
     }
+
+    /* --- Anomaly Profile Card Styles --- */
+    .anomaly-profile-card {
+        background-color: #1c2128;
+        border: 1px solid #30363d;
+        border-radius: 16px;
+        overflow: hidden;
+        margin-bottom: 24px;
+    }
+    
+    .anomaly-profile-header {
+        padding: 24px 28px 16px 28px;
+        border-bottom: 1px solid #30363d;
+    }
+    
+    .anomaly-profile-header-happy {
+        background: linear-gradient(135deg, #2d2515 0%, #1c2128 100%);
+    }
+    
+    .anomaly-profile-header-loyal {
+        background: linear-gradient(135deg, #2d1515 0%, #1c2128 100%);
+    }
+    
+    .anomaly-profile-body {
+        padding: 24px 28px;
+    }
+    
+    .metric-compare-row {
+        display: flex;
+        align-items: center;
+        padding: 14px 16px;
+        background-color: #161b22;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #21262d;
+        transition: all 0.2s ease;
+    }
+    
+    .metric-compare-row:hover {
+        border-color: #30363d;
+        transform: translateX(4px);
+    }
+    
+    .metric-compare-label {
+        flex: 1;
+        font-size: 0.9rem;
+        color: #8b949e;
+        font-weight: 500;
+    }
+    
+    .metric-compare-values {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+    
+    .metric-value-theirs {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #ffffff;
+        min-width: 70px;
+        text-align: right;
+    }
+    
+    .metric-vs-text {
+        font-size: 0.75rem;
+        color: #555d6b;
+        font-weight: 500;
+    }
+    
+    .metric-value-avg {
+        font-size: 0.9rem;
+        color: #6e7681;
+        min-width: 70px;
+        text-align: right;
+    }
+    
+    .metric-badge {
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 6px;
+        margin-left: 12px;
+        white-space: nowrap;
+    }
+    
+    .badge-higher {
+        background-color: #17B79420;
+        color: #17B794;
+        border: 1px solid #17B79440;
+    }
+    
+    .badge-lower {
+        background-color: #EEB76B20;
+        color: #EEB76B;
+        border: 1px solid #EEB76B40;
+    }
+    
+    .badge-similar {
+        background-color: #6e768120;
+        color: #6e7681;
+        border: 1px solid #6e768140;
+    }
+    
+    .investigation-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 14px;
+        background-color: #161b22;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        border-left: 3px solid #30363d;
+        font-size: 0.88rem;
+        color: #c9d1d9;
+        line-height: 1.5;
+    }
+    
+    .investigation-item:hover {
+        border-left-color: #17B794;
+    }
+    
+    .investigation-icon {
+        font-size: 1.1rem;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+    
+    .simple-bar-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+    }
+    
+    .simple-bar-track {
+        flex: 1;
+        height: 6px;
+        background-color: #21262d;
+        border-radius: 3px;
+        overflow: hidden;
+        position: relative;
+    }
+    
+    .simple-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.6s ease;
+    }
+    
+    .simple-bar-fill-higher { background-color: #17B794; }
+    .simple-bar-fill-lower { background-color: #EEB76B; }
     
     @media (max-width: 768px) {
         .prediction-card {
@@ -1138,173 +1288,231 @@ def main():
                                         with col: st.markdown(card_html, unsafe_allow_html=True)
 
         # ====================================================================
-        # FIXED: Anomaly Detection - Replaced confusing radar chart
+        # COMPLETELY REDESIGNED: Anomaly Detection for Non-Technical HRs
         # ====================================================================
         with tab3:
             st.subheader("🕵️ Anomaly Detection")
-            st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Discover the people who defy the AI's logic.</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #9ca3af; margin-bottom: 24px;'>The AI is usually right, but not always. This page shows you the people who surprised us — so you can learn from them.</p>", unsafe_allow_html=True)
             
-            # Clear explanation cards
-            c_exp1, c_exp2 = st.columns(2)
-            with c_exp1:
-                st.markdown("""
-                <div class="custom-card" style="border-left: 4px solid #EEB76B;">
-                    <h4 style="color: #EEB76B; margin-top: 0;">🚪 Happy Leavers</h4>
-                    <p style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 0;">The AI said <strong>"Stay"</strong>, but they <strong>Left</strong>.<br>
-                    <span style="color: #8b949e; font-size: 0.8rem;">Why? Poaching? Spouse relocation? Factors outside our data?</span></p>
-                </div>
-                """, unsafe_allow_html=True)
-            with c_exp2:
-                st.markdown("""
-                <div class="custom-card" style="border-left: 4px solid #FF4B4B;">
-                    <h4 style="color: #FF4B4B; margin-top: 0;">🛡️ Loyal Sufferers</h4>
-                    <p style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 0;">The AI said <strong>"Leave"</strong>, but they <strong>Stayed</strong>.<br>
-                    <span style="color: #8b949e; font-size: 0.8rem;">Golden handcuffs? No better options? Silent quitters?</span></p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            X_all = df.drop('left', axis=1); y_true = df['left']
+            X_all = df.drop('left', axis=1)
+            y_true = df['left']
             
             raw_probs_anomaly = pipeline.predict_proba(X_all)[:, 1]
             cal_probs_anomaly = calibrate_probability_array(raw_probs_anomaly, temperature=0.55)
             y_pred = (cal_probs_anomaly >= 0.5).astype(int)
             
-            happy_leavers_indices = np.where((y_pred == 0) & (y_true == 1))[0]
-            df_happy_leavers = df.iloc[happy_leavers_indices]
-            loyal_sufferers_indices = np.where((y_pred == 1) & (y_true == 0))[0]
-            df_loyal_sufferers = df.iloc[loyal_sufferers_indices]
+            happy_indices = np.where((y_pred == 0) & (y_true == 1))[0]
+            loyal_indices = np.where((y_pred == 1) & (y_true == 0))[0]
+            df_happy = df.iloc[happy_indices]
+            df_loyal = df.iloc[loyal_indices]
             
-            # FIX 1: Exclude 'left' column from comparison
-            numeric_cols_anomaly = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
+            numeric_cols = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
+            stats_avg = df[numeric_cols].mean()
             
-            def get_profile_stats(df_group):
-                if len(df_group) == 0: return None
-                return df_group[numeric_cols_anomaly].mean()
-
-            stats_avg = get_profile_stats(df)
-            stats_happy = get_profile_stats(df_happy_leavers)
-            stats_loyal = get_profile_stats(df_loyal_sufferers)
-            
-            # Show the actual employee records
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.markdown("### 🚪 Happy Leavers")
-                st.caption(f"Found: {len(df_happy_leavers)} employees")
-                if len(df_happy_leavers) > 0:
-                    st.dataframe(df_happy_leavers.head(5), use_container_width=True)
-                else:
-                    st.success("✅ None found. The model predicted all leavers correctly.")
-            with col_b:
-                st.markdown("### 🛡️ Loyal Sufferers")
-                st.caption(f"Found: {len(df_loyal_sufferers)} employees")
-                if len(df_loyal_sufferers) > 0:
-                    st.dataframe(df_loyal_sufferers.head(5), use_container_width=True)
-                else:
-                    st.success("✅ None found. All high-risk employees left as predicted.")
-            
-            # Only show the chart if we have anomalies
-            has_happy = stats_happy is not None
-            has_loyal = stats_loyal is not None
-            
-            if has_happy or has_loyal:
-                st.markdown("---")
-                st.subheader("📊 What Makes Them Different from the Average?")
-                st.caption("This chart shows how much each anomaly group deviates from the company average. The 0% line = normal. Bars further from 0% = more unusual.")
-                
-                # FIX 2: Calculate percentage deviation from average (solves the scale problem)
-                deviations = []
-                for col in numeric_cols_anomaly:
-                    avg_val = stats_avg[col]
-                    if avg_val == 0: continue  # Skip zero-baseline features to avoid division by zero
+            # ---- HELPER: Build a simple profile comparison ----
+            def build_profile_rows(group_df, avg_series):
+                if len(group_df) == 0: return []
+                group_mean = group_df[numeric_cols].mean()
+                rows = []
+                for col in numeric_cols:
+                    their_val = group_mean[col]
+                    avg_val = avg_series[col]
+                    if avg_val == 0:
+                        pct_diff = 0
+                    else:
+                        pct_diff = ((their_val - avg_val) / avg_val) * 100
                     
-                    if has_happy:
-                        happy_dev = ((stats_happy[col] - avg_val) / avg_val) * 100
-                        deviations.append({
-                            'Group': '🚪 Happy Leavers', 
-                            'Feature': col.replace('_', ' ').title(), 
-                            'Deviation %': round(happy_dev, 1),
-                            'Actual': round(stats_happy[col], 2),
-                            'Average': round(avg_val, 2)
-                        })
-                    if has_loyal:
-                        loyal_dev = ((stats_loyal[col] - avg_val) / avg_val) * 100
-                        deviations.append({
-                            'Group': '🛡️ Loyal Sufferers', 
-                            'Feature': col.replace('_', ' ').title(), 
-                            'Deviation %': round(loyal_dev, 1),
-                            'Actual': round(stats_loyal[col], 2),
-                            'Average': round(avg_val, 2)
-                        })
+                    if abs(pct_diff) < 8:
+                        badge_class = "badge-similar"
+                        badge_text = "Similar"
+                    elif pct_diff > 0:
+                        badge_class = "badge-higher"
+                        badge_text = "Higher"
+                    else:
+                        badge_class = "badge-lower"
+                        badge_text = "Lower"
+                    
+                    bar_width = min(abs(pct_diff), 100)
+                    bar_class = "simple-bar-fill-higher" if pct_diff > 0 else "simple-bar-fill-lower" if pct_diff < 0 else ""
+                    
+                    rows.append({
+                        'label': col.replace('_', ' ').title(),
+                        'their_val': their_val,
+                        'avg_val': avg_val,
+                        'badge_class': badge_class,
+                        'badge_text': badge_text,
+                        'bar_width': bar_width,
+                        'bar_class': bar_class,
+                        'pct_diff': pct_diff
+                    })
+                rows.sort(key=lambda x: abs(x['pct_diff']), reverse=True)
+                return rows
+            
+            def format_val(col, val):
+                col_lower = col.lower()
+                if 'satisfaction' in col_lower or 'evaluation' in col_lower:
+                    return f"{val:.2f}"
+                elif 'accident' in col_lower or 'promotion' in col_lower:
+                    if val < 0.3: return "No"
+                    elif val > 0.7: return "Yes"
+                    else: return f"{val:.0%}"
+                elif 'hours' in col_lower or 'time' in col_lower or 'project' in col_lower:
+                    return f"{val:.1f}"
+                else:
+                    return f"{val:.1f}"
+            
+            # ============================================================
+            # HAPPY LEAVERS CARD
+            # ============================================================
+            if len(df_happy) > 0:
+                happy_rows = build_profile_rows(df_happy, stats_avg)
+                top_happy = happy_rows[:4]
                 
-                dev_df = pd.DataFrame(deviations)
+                rows_html = ""
+                for r in top_happy:
+                    their_formatted = format_val(r['label'].lower().replace(' ', '_'), r['their_val'])
+                    avg_formatted = format_val(r['label'].lower().replace(' ', '_'), r['avg_val'])
+                    bar_html = f"<div class='simple-bar-track'><div class='simple-bar-fill {r['bar_class']}' style='width: {r['bar_width']}%;'></div></div>" if r['bar_width'] > 5 else ""
+                    rows_html += f"""
+                    <div class="metric-compare-row">
+                        <div class="metric-compare-label">{r['label']}</div>
+                        <div class="metric-compare-values">
+                            <div class="metric-value-theirs">{their_formatted}</div>
+                            <div class="metric-vs-text">vs</div>
+                            <div class="metric-value-avg">{avg_formatted}</div>
+                            <div class="metric-badge {r['badge_class']}">{r['badge_text']}</div>
+                        </div>
+                    </div>
+                    {bar_html}
+                    """
                 
-                # FIX 3: Use horizontal bar chart instead of radar chart
-                fig = px.bar(
-                    dev_df,
-                    x='Deviation %',
-                    y='Feature',
-                    color='Group',
-                    orientation='h',
-                    title="How Anomaly Groups Differ from Company Average",
-                    template="plotly_dark",
-                    color_discrete_map={
-                        '🚪 Happy Leavers': '#EEB76B', 
-                        '🛡️ Loyal Sufferers': '#FF4B4B'
-                    },
-                    height=max(350, len(numeric_cols_anomaly) * 55),
-                    barmode='group'
-                )
-                fig.update_layout(
-                    yaxis={'categoryorder': 'array', 'categoryarray': sorted(dev_df['Feature'].unique())},
-                    xaxis_title="% Difference from Company Average (0% = Normal)",
-                    yaxis_title="",
-                    showlegend=True,
-                    legend=dict(
-                        orientation="h", 
-                        yanchor="bottom", 
-                        y=1.05, 
-                        xanchor="center", 
-                        x=0.5
-                    ),
-                    margin=dict(l=10, r=10, t=60, b=10)
-                )
-                # Add a 0% reference line
-                fig.add_vline(x=0, line_dash="solid", line_color="white", opacity=0.25, line_width=1)
+                st.markdown(f"""
+                <div class="anomaly-profile-card">
+                    <div class="anomaly-profile-header anomaly-profile-header-happy">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <h3 style="margin: 0; color: #EEB76B; font-size: 1.3rem;">🚪 Happy Leavers</h3>
+                                <p style="margin: 6px 0 0 0; color: #8b949e; font-size: 0.85rem;">{len(df_happy)} people the AI said would stay — but they left anyway</p>
+                            </div>
+                            <div style="background-color: #EEB76B20; border: 1px solid #EEB76B40; border-radius: 10px; padding: 10px 18px; text-align: center;">
+                                <div style="font-size: 1.6rem; font-weight: 700; color: #EEB76B;">{len(df_happy)}</div>
+                                <div style="font-size: 0.7rem; color: #EEB76B; text-transform: uppercase; letter-spacing: 0.5px;">People</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="anomaly-profile-body">
+                        <p style="color: #8b949e; font-size: 0.85rem; margin: 0 0 14px 0;">How they compared to the average employee (top differences only):</p>
+                        {rows_html}
+                        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #30363d;">
+                            <p style="color: #ffffff; font-size: 0.9rem; font-weight: 600; margin: 0 0 12px 0;">❓ Questions to investigate:</p>
+                            <div class="investigation-item">
+                                <span class="investigation-icon">🔎</span>
+                                <span>Were any of them poached by a competitor? Check if they joined a rival company.</span>
+                            </div>
+                            <div class="investigation-item">
+                                <span class="investigation-icon">🏠</span>
+                                <span>Did personal reasons play a role? (Spouse relocation, health, family)</span>
+                            </div>
+                            <div class="investigation-item">
+                                <span class="investigation-icon">📋</span>
+                                <span>What do their exit interviews say? Look for themes the data doesn't capture.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                # Add custom hover data
-                fig.update_traces(
-                    hovertemplate="<b>%{y}</b><br>Deviation: %{x:+.1f}%<extra></extra>"
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # FIX 4: Add clear, actionable key takeaways
-                st.markdown("### 💡 Key Takeaways")
-                
-                if has_happy:
-                    happy_sorted = dev_df[dev_df['Group'] == '🚪 Happy Leavers'].sort_values('Deviation %', key=abs, ascending=False)
-                    if len(happy_sorted) > 0:
-                        top_happy = happy_sorted.iloc[0]
-                        st.info(
-                            f"**Happy Leavers** stood out most in **{top_happy['Feature']}** "
-                            f"(they averaged **{top_happy['Actual']}** vs. company average of **{top_happy['Average']}**, "
-                            f"a **{top_happy['Deviation %']:+.1f}%** difference). "
-                            f"This factor didn't trigger the AI — it may indicate external factors (poaching, relocation)."
-                        )
-                
-                if has_loyal:
-                    loyal_sorted = dev_df[dev_df['Group'] == '🛡️ Loyal Sufferers'].sort_values('Deviation %', key=abs, ascending=False)
-                    if len(loyal_sorted) > 0:
-                        top_loyal = loyal_sorted.iloc[0]
-                        st.warning(
-                            f"**Loyal Sufferers** stood out most in **{top_loyal['Feature']}** "
-                            f"(they averaged **{top_loyal['Actual']}** vs. company average of **{top_loyal['Average']}**, "
-                            f"a **{top_loyal['Deviation %']:+.1f}%** difference). "
-                            f"They match the risk profile but haven't left — likely 'golden handcuffed' or lacking alternatives. Monitor closely."
-                        )
+                with st.expander("📋 View sample records"):
+                    st.dataframe(df_happy.head(5), use_container_width=True)
             else:
+                st.markdown("""
+                <div class="custom-card" style="text-align: center; border-color: #17B794;">
+                    <h3 style="color: #17B794; margin-top: 0;">🚪 No Happy Leavers Found</h3>
+                    <p style="color: #8b949e;">The AI correctly predicted everyone who left. Great model accuracy!</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # ============================================================
+            # LOYAL SUFFERERS CARD
+            # ============================================================
+            if len(df_loyal) > 0:
+                loyal_rows = build_profile_rows(df_loyal, stats_avg)
+                top_loyal = loyal_rows[:4]
+                
+                rows_html = ""
+                for r in top_loyal:
+                    their_formatted = format_val(r['label'].lower().replace(' ', '_'), r['their_val'])
+                    avg_formatted = format_val(r['label'].lower().replace(' ', '_'), r['avg_val'])
+                    bar_html = f"<div class='simple-bar-track'><div class='simple-bar-fill {r['bar_class']}' style='width: {r['bar_width']}%;'></div></div>" if r['bar_width'] > 5 else ""
+                    rows_html += f"""
+                    <div class="metric-compare-row">
+                        <div class="metric-compare-label">{r['label']}</div>
+                        <div class="metric-compare-values">
+                            <div class="metric-value-theirs">{their_formatted}</div>
+                            <div class="metric-vs-text">vs</div>
+                            <div class="metric-value-avg">{avg_formatted}</div>
+                            <div class="metric-badge {r['badge_class']}">{r['badge_text']}</div>
+                        </div>
+                    </div>
+                    {bar_html}
+                    """
+                
+                st.markdown(f"""
+                <div class="anomaly-profile-card">
+                    <div class="anomaly-profile-header anomaly-profile-header-loyal">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <h3 style="margin: 0; color: #FF4B4B; font-size: 1.3rem;">🛡️ Loyal Sufferers</h3>
+                                <p style="margin: 6px 0 0 0; color: #8b949e; font-size: 0.85rem;">{len(df_loyal)} people the AI said would leave — but they're still here</p>
+                            </div>
+                            <div style="background-color: #FF4B4B20; border: 1px solid #FF4B4B40; border-radius: 10px; padding: 10px 18px; text-align: center;">
+                                <div style="font-size: 1.6rem; font-weight: 700; color: #FF4B4B;">{len(df_loyal)}</div>
+                                <div style="font-size: 0.7rem; color: #FF4B4B; text-transform: uppercase; letter-spacing: 0.5px;">People</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="anomaly-profile-body">
+                        <p style="color: #8b949e; font-size: 0.85rem; margin: 0 0 14px 0;">How they compared to the average employee (top differences only):</p>
+                        {rows_html}
+                        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #30363d;">
+                            <p style="color: #ffffff; font-size: 0.9rem; font-weight: 600; margin: 0 0 12px 0;">⚠️ Why are they still here? Likely reasons:</p>
+                            <div class="investigation-item">
+                                <span class="investigation-icon">⛓️</span>
+                                <span><strong>"Golden Handcuffs"</strong> — Good benefits or bonuses make leaving financially painful, even if they're unhappy.</span>
+                            </div>
+                            <div class="investigation-item">
+                                <span class="investigation-icon">🔍</span>
+                                <span><strong>No better options</strong> — They may want to leave but can't find another job in the current market.</span>
+                            </div>
+                            <div class="investigation-item">
+                                <span class="investigation-icon">🔇</span>
+                                <span><strong>"Quiet Quitters"</strong> — They've mentally checked out. They do the minimum but aren't engaged. High flight risk if the market improves.</span>
+                            </div>
+                            <div class="investigation-item">
+                                <span class="investigation-icon">💡</span>
+                                <span><strong>Action:</strong> Don't ignore them just because they haven't left. Schedule 1-on-1s to understand their real sentiment before it's too late.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                with st.expander("📋 View sample records"):
+                    st.dataframe(df_loyal.head(5), use_container_width=True)
+            else:
+                st.markdown("""
+                <div class="custom-card" style="text-align: center; border-color: #17B794;">
+                    <h3 style="color: #17B794; margin-top: 0;">🛡️ No Loyal Sufferers Found</h3>
+                    <p style="color: #8b949e;">Everyone the AI flagged as high-risk actually left. The model is well-calibrated.</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # No anomalies at all
+            if len(df_happy) == 0 and len(df_loyal) == 0:
                 st.markdown("---")
-                st.success("🎯 **No anomalies detected.** The AI model's predictions align perfectly with actual outcomes.")
+                st.success("🎯 **No surprises found.** The AI's predictions matched reality perfectly for every employee.")
 
         with tab4:
             st.subheader("📊 Retention Priority Matrix")
