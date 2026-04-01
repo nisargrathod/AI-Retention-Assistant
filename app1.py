@@ -543,7 +543,8 @@ def run_groq_consultant(employee_name, department, situation, solution, budget):
         llm = ChatGroq(
             groq_api_key=api_key,
             model_name="llama-3.3-70b-versatile",
-            temperature=0.7
+            temperature=0.7,
+            timeout=30
         )
     except Exception as e:
         st.error(f"Connection Error: {e}")
@@ -583,7 +584,10 @@ def run_groq_consultant(employee_name, department, situation, solution, budget):
             st.markdown(f"<div class='llm-response'>{response}</div>", unsafe_allow_html=True)
             
         except Exception as e:
-            st.error(f"Error generating draft: {e}")
+            if "rate_limit" in str(e).lower() or "429" in str(e):
+                st.warning("⏳ **AI is busy right now.** The servers are overloaded. Please wait 30 seconds and try again.")
+            else:
+                st.error(f"Error generating draft: {e}")
 
 
 # ====================================================================
@@ -1131,12 +1135,9 @@ def main():
                                     if index < len(top_3_drivers):
                                         driver_row = top_3_drivers.iloc[index]; feature_name = driver_row['Feature']; impact_score = driver_row['Impact_Score']
                                         icon, title, advice = get_driver_advice(feature_name)
-                                        card_html = f"<div class='custom-card' style='border-top: 4px solid #17B794;'><div style='display: flex; align-items: center; margin-bottom: 10px;'><span style='font-size: 1.5rem; margin-right: 10px;'>{icon}</span><h4 style='margin: 0; color: #fff;'>{title}</h4></div><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{advice}</p><small style='color: #8b949e;'>Driver: {feature_name.replace('_', ' ').title()}</small></div>"
+                                        card_html = f"<div class='custom-card' style='border-top: 4px solid #17B794;'><div style='display: flex; align-items: center; margin-bottom: 10px;'><span style='font-size: 1.5rem; margin-right: 10px;'>{icon}</span><h4 style='margin: 0; color: #fff;'>{title}</h4></div><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{advice}</p><small style='color: #8b949e;'>Driver: {feature_name.replace('_', ' ').title()}</small></div></div>"
                                         with col: st.markdown(card_html, unsafe_allow_html=True)
 
-        # ====================================================================
-        # NEW TAB: AI DISRUPTION DEFENSE
-        # ====================================================================
         with tab3:
             st.subheader("🛡️ AI Disruption Defense")
             st.caption("Prove to leadership that reskilling is cheaper than mass layoffs.")
@@ -1148,7 +1149,7 @@ def main():
             # ---- SECTION 1: VULNERABILITY ASSESSMENT ----
             if 'Department' in df.columns and 'satisfaction_level' in df.columns:
                 st.markdown("### Step 1: Department Vulnerability Assessment")
-                st.write("AI can easily replace repetitive, low-satisfaction tasks. It struggles with complex, high-judgment tasks. We use your existing HR data to estimate which departments have roles most vulnerable to AI automation.")
+                st.write("AI can easily replace repetitive, low-satisfaction tasks. AI struggles with complex, high-judgment tasks. We use your existing HR data to estimate which departments have roles most vulnerable to AI automation.")
                 
                 dept_vuln = []
                 for dept in df['Department'].unique():
@@ -1170,7 +1171,7 @@ def main():
                 st.plotly_chart(fig_vuln, use_container_width=True)
                 
                 st.info("**How to read this:** A score of 70+ means the department likely has many repetitive tasks (data entry, basic support). A score under 30 means the work is too complex for current AI.")
-            
+
             # ---- SECTION 2: THE FINANCIAL CALCULATOR ----
             st.markdown("---")
             st.markdown("### Step 2: The Billion-Rupee Calculator (Reskill vs. Layoff)")
@@ -1190,12 +1191,12 @@ def main():
             
             # Layoff Math
             severance_cost = (avg_salary / 12) * 3 * num_employees
-            new_hire_cost = (avg_salary * 2) * (num_employees * 0.1) # Assume we need AI talent for 10% of headcount
+            new_hire_cost = (avg_salary * 2) * (num_employees * 0.1)
             total_layoff_cost = severance_cost + new_hire_cost
             
             # Reskill Math
             training_cost = (avg_salary / 12) * 1.5 * num_employees
-            productivity_dip = (avg_salary / 12) * 1 * num_employees # 1 month of half productivity
+            productivity_dip = (avg_salary / 12) * 1 * num_employees
             total_reskill_cost = training_cost + productivity_dip
             
             savings = total_layoff_cost - total_reskill_cost
@@ -1208,36 +1209,41 @@ def main():
             st.markdown("---")
             
             if savings > 0:
-                st.success(f"**The Verdict: Reskill.** By choosing to reskill instead of laying off, you save ₹{savings/10000000:.2f} Crores. You also avoid the hidden costs of layoffs: loss of institutional knowledge, drop in team morale, and damage to your employer brand.")
+                st.success(f"**The Verdict: Reskill.** By choosing to reskill instead of laying off, you save ₹{savings/10000000:.2f} Crores. You also avoid the hidden costs of layoffs: loss of institutional knowledge, drop in remaining team morale, and employer brand damage.")
             else:
-                st.warning(f"**The Verdict: Layoffs are technically cheaper here.** However, consider the hidden costs of layoffs (brand damage, legal risks, remaining team burnout) before proceeding.")
+                st.warning(f"**The Verdict: Layoffs are technically cheaper here. However, consider the hidden costs of layoffs (brand damage, legal risks, remaining team burnout) before proceeding.")
             
             # ---- SECTION 3: AI STRATEGY MEMO ----
             if st.button("✍️ Generate Strategy Memo for CEO", type="primary", key="gen_ai_memo"):
                 with st.spinner("Drafting strategy memo..."):
                     try:
                         api_key = st.secrets.get("GROQ_API_KEY", None)
-                        if api_key:
-                            llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.5)
-                            template = """You are an HR Director writing to the CEO. Keep it strictly under 400 words. Use bullet points. No fluff.
+                        if not api_key:
+                            st.warning("🔑 System Error: API Key missing. Showing generic template.")
+                            st.markdown("**Month 1: Diagnosis & Audit**\n* Conduct stay interviews with top 10% at-risk employees.\n* *Metric:* Complete 100% of risk interviews.\n\n**Month 3: Pilot Launch**\n* Launch intervention in one high-risk department.\n* *Metric:* Pilot participation rate > 80%.\n\n**Month 6: Review**\n* Measure impact on satisfaction.\n* *Metric:* 5% reduction in projected attrition.")
+                            return
+                        
+                        llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.5, timeout=30)
+                        template = """You are an HR Director writing to the CEO. Keep it strictly under 400 words. Use bullet points. No fluff.
 
-                            **Context:**
-                            - We analyzed {num_employees} employees at risk of AI automation.
-                            - Layoff + rehiring AI talent costs: ₹{total_layoff_cost/10000000:.1f} Cr.
-                            - Reskilling the same team costs: ₹{total_reskill_cost/10000000:.1f} Cr.
-                            - Reskilling saves us ₹{savings/10000000:.1f} Cr.
-                            - Layoffs cause hidden costs: institutional knowledge loss, 30% drop in remaining team morale, employer brand damage.
+**Context:**
+- We analyzed {num_employees} employees at risk of AI automation.
+- Layoff + rehiring AI talent costs: ₹{total_layoff_cost/10000000:.1f} Cr.
+- Reskilling the same team costs: ₹{total_reskill_cost/10000000:.1f} Cr.
+- Reskilling saves us ₹{savings/10000000:.1f} Cr.
+- Layoffs cause hidden costs: institutional knowledge loss, 30% drop in remaining team morale, employer brand damage.
 
-                            **Task:**
-                            Recommend reskilling. Briefly explain why layoffs are a trap for companies in our stage. Propose a 6-month pilot reskilling program."""
-                            prompt = PromptTemplate.from_template(template)
-                            chain = prompt | llm | StrOutputParser()
-                            response = chain.invoke({"num_employees": num_employees, "total_layoff_cost": f"₹{total_layoff_cost/10000000:.1f} Cr", "total_reskill_cost": f"₹{total_reskill_cost/10000000:.1f} Cr", "savings": f"₹{savings/10000000:.1f} Cr"})
-                            st.markdown(f"<div class='llm-response'>{response}</div>", unsafe_allow_html=True)
-                        else:
-                            st.warning("🔑 API Key missing. Showing generic template.")
+**Task:**
+Recommend reskilling. Briefly explain why layoffs are a trap for companies in our stage. Propose a 6-month pilot reskilling program."""
+                        prompt = PromptTemplate.from_template(template)
+                        chain = prompt | llm | StrOutputParser()
+                        response = chain.invoke({"num_employees": num_employees, "total_layoff_cost": f"₹{total_layoff_cost/10000000:.1f} Cr", "total_reskill_cost": f"₹{total_reskill_cost/10000000:.1f} Cr", "savings": f"₹{savings/10000000:.1f} Cr"})
+                        st.markdown(f"<div class='llm-response'>{response}</div>", unsafe_allow_html=True)
                     except Exception as e:
-                        st.error(f"Error: {e}")
+                        if "rate_limit" in str(e).lower() or "429" in str(e):
+                            st.warning("⏳ **AI is busy right now.** Groq's servers are overloaded (very common with the current AI model). Please wait 30 seconds and try again.")
+                        else:
+                            st.error(f"❌ Error generating memo: {e}")
 
         with tab4:
             st.subheader("📊 Retention Priority Matrix")
@@ -1268,47 +1274,47 @@ def main():
             st.markdown("---"); col_z1, col_z2, col_z3 = st.columns(3)
             critical_count = len(plot_data[plot_data['Zone'] == "🔴 Critical Zone (Save Now)"]); outplace_count = len(plot_data[plot_data['Zone'] == "🟢 Outplacement Zone (Let Go)"])
             col_z1.metric("Critical Interventions Needed", critical_count, delta="High Priority", delta_color="inverse"); col_z2.metric("Potential Efficiency Savings", outplace_count, delta="Safe to Exit", delta_color="normal"); col_z3.metric("Average Replacement Cost", f"₹{int(cost_threshold):,}")
-
-        with tab5:
-            st.subheader("🎯 The 'Ideal Candidate' Profiler")
-            st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Shift from Retention to <strong>Acquisition</strong>. <br>We analyze your 'Superstars' (Loyal + High Performers) to build a clear hiring checklist.</p>", unsafe_allow_html=True)
-            if 'time_spend_company' in df.columns and 'last_evaluation' in df.columns:
-                superstar_mask = (df['left'] == 0) & (df['time_spend_company'] > 4) & (df['last_evaluation'] > 0.8)
-            else:
-                st.info("Dataset missing specific tenure/evaluation columns. Defining Superstars simply as top retained performers.")
-                superstar_mask = (df['left'] == 0)
+            
+            with tab5:
+                st.subheader("🎯 The 'Ideal Candidate' Profiler")
+                st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Shift from Retention to <strong>Acquisition</strong>. <br>We analyze your 'Superstars' (Loyal + High Performers) to build a clear hiring checklist.</p>", unsafe_allow_html=True)
+                if 'time_spend_company' in df.columns and 'last_evaluation' in df.columns:
+                    superstar_mask = (df['left'] == 0) & (df['time_spend_company'] > 4) & (df['last_evaluation'] > 0.8)
+                else:
+                    st.info("Dataset missing specific tenure/evaluation columns. Defining Superstars simply as top retained performers.")
+                    superstar_mask = (df['left'] == 0)
                 
-            df_superstars = df[superstar_mask]; df_average = df[(df['left'] == 0) & (~superstar_mask)]
-            if len(df_superstars) < 5: st.warning("Not enough 'Superstar' data in this dataset to generate a reliable profile.")
-            else:
-                st.success(f"Analyzed {len(df_superstars)} Superstars vs {len(df_average)} Average Employees.")
-                metrics_to_compare = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
-                super_mean = df_superstars[metrics_to_compare].mean(); avg_mean = df_average[metrics_to_compare].mean()
-                comparison_long = pd.DataFrame({'Metric': metrics_to_compare, 'Superstar': super_mean.values, 'Average Employee': avg_mean.values}).melt(id_vars='Metric', var_name='Group', value_name='Average Value')
-                fig_compare = px.bar(comparison_long, x='Metric', y='Average Value', color='Group', barmode='group', title="Superstars vs. Average Employees (Head-to-Head)", template="plotly_dark", color_discrete_map={'Superstar': '#17B794', 'Average Employee': '#9ca3af'}, text_auto=True, height=500)
-                fig_compare.update_xaxes(title="", tickangle=45); fig_compare.update_layout(yaxis_title="Average Score / Value"); st.plotly_chart(fig_compare, use_container_width=True)
-                st.markdown("### 🧬 The DNA of a Top Performer"); st.write("Here are the 3 biggest differentiators between your best employees and the rest.")
-                diff_df = pd.DataFrame({'Metric': metrics_to_compare, 'Difference': (super_mean - avg_mean).values})
-                diff_df['Abs_Diff'] = diff_df['Difference'].abs(); top_3_diff = diff_df.nlargest(3, 'Abs_Diff')
-                col_dna1, col_dna2, col_dna3 = st.columns(3)
-                def get_dna_insight(metric, diff_val):
-                    metric_name = metric.replace('_', ' ').title()
-                    if 'satisfaction' in metric.lower():
-                        if diff_val > 0: return "🟢 High Culture Fit", f"Superstars are {diff_val:.2f} points happier on average."
-                        else: return "🔴 Low Satisfaction", f"Unexpected: Superstars seem less satisfied."
-                    elif 'hours' in metric.lower():
-                        if diff_val < 0: return "🟢 Work-Life Balance", f"Superstars work {abs(diff_val):.0f} hrs LESS."
-                        else: return "🔴 High Workload", f"Superstars work harder."
-                    elif 'evaluation' in metric.lower():
-                        if diff_val > 0: return "🟢 High Performance", f"Superstars score {diff_val:.2f} points higher."
-                        else: return "🔴 Low Performance", f"Superstars score lower."
-                    else: return "📊 " + metric_name, f"Difference of {diff_val:.2f}."
-                cols = [col_dna1, col_dna2, col_dna3]
-                for i, col in enumerate(cols):
-                    if i < len(top_3_diff):
-                        row = top_3_diff.iloc[i]; title, text = get_dna_insight(row['Metric'], row['Difference'])
-                        st.markdown(f"<div class='custom-card' style='text-align: center; border-top: 4px solid #17B794;'><h3 style='margin-top: 0;'>{title}</h3><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{text}</p></div>", unsafe_allow_html=True)
-                st.markdown("---"); st.markdown("### 📝 Hiring Checklist (Do's & Don'ts)"); st.write("Based on the data, apply these filters to your next job opening:")
+                df_superstars = df[superstar_mask]; df_average = df[(df['left'] == 0) & (~superstar_mask)]
+                if len(df_superstars) < 5: st.warning("Not enough 'Superstar' data in this dataset to generate a reliable profile.")
+                else:
+                    st.success(f"Analyzed {len(df_superstars)} Superstars vs {len(df_average)} Average Employees.")
+                    metrics_to_compare = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
+                    super_mean = df_superstars[metrics_to_compare].mean(); avg_mean = df_average[metrics_to_compare].mean()
+                    comparison_long = pd.DataFrame({'Metric': metrics_to_compare, 'Superstar': super_mean.values, 'Average Employee': avg_mean.values}).melt(id_vars='Metric', var_name='Group', value_name='Average Value')
+                    fig_compare = px.bar(comparison_long, x='Metric', y='Average Value', color='Group', barmode='group', title="Superstars vs. Average Employees (Head-to-Head)", template="plotly_dark", color_discrete_map={'Superstar': '#17B794', 'Average Employee': '#9ca3af'}, text_auto=True, height=500)
+                    fig_compare.update_xaxes(title="", tickangle=45); fig_compare.update_layout(yaxis_title="Average Score / Value"); st.plotly_chart(fig_compare, use_container_width=True)
+                    st.markdown("### 🧬 The DNA of a Top Performer"); st.write("Here are the 3 biggest differentiators between your best employees and the rest.")
+                    diff_df = pd.DataFrame({'Metric': metrics_to_compare, 'Difference': (super_mean - avg_mean).values})
+                    diff_df['Abs_Diff'] = diff_df['Difference'].abs(); top_3_diff = diff_df.nlargest(3, 'Abs_Diff')
+                    col_dna1, col_dna2, col_dna3 = st.columns(3)
+                    def get_dna_insight(metric, diff_val):
+                        metric_name = metric.replace('_', ' ').title()
+                        if 'satisfaction' in metric.lower():
+                            if diff_val > 0: return "🟢 High Culture Fit", f"Superstars are {diff_val:.2f} points happier on average."
+                            else: return "🔴 Low Satisfaction", f"Unexpected: Superstars seem less satisfied."
+                        elif 'hours' in metric.lower():
+                            if diff_val < 0: return "🟢 Work-Life Balance", f"Superstars work {abs(diff_val):.0f} hrs LESS."
+                            else: return "🔴 High Workload", f"Superstars work harder."
+                        elif 'evaluation' in metric.lower():
+                            if diff_val > 0: return "🟢 High Performance", f"Superstars score {diff_val:.2f} points higher."
+                            else: return "🔴 Low Performance", f"Superstars score lower."
+                        else: return "📊 " + metric_name, f"Difference of {diff_val:.2f}."
+                    cols = [col_dna1, col_dna2, col_dna3 = st.columns(3)
+                    for i, col in enumerate(cols):
+                        if i < len(top_3_diff):
+                            row = top_3_diff.iloc[i]; title, text = get_dna_insight(row['Metric'], row['Difference'])
+                            st.markdown(f"<div class='custom-card' style='text-align: center; border-top: 4px solid #17B794;'><h3 style='margin-top: 0;'>{title}</h3><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{text}</p></div>", unsafe_allow_html=True)
+                st.markdown("---"); st.markdown("### 📝 Hiring Checklist (Do's & Don'ts & Don'ts)"); st.write("Based on the data, apply these filters to your next job opening:")
                 checklist = []
                 
                 top_3_features = top_3_diff['Metric'].tolist()
@@ -1387,8 +1393,6 @@ def main():
                         st.error(f"**{item['Type']}**: {item['Rule']}")
                     elif "NOTE" in item['Type']: 
                         st.warning(f"**{item['Type']}**: {item['Rule']}")
-                    elif "CONSIDER" in item['Type']: 
-                        st.info(f"**{item['Type']}**: {item['Rule']}")
                     else: 
                         st.info(f"**{item['Type']}**: {item['Rule']}")
 
@@ -1446,11 +1450,10 @@ def main():
             intervention_efficacy = st.slider("If we take action, how many at-risk people will we actually save? (%)", 10, 50, 20, 5, help="If 100 people are at risk, and you set this to 20%, you expect to successfully retain 20 people.")
         with col_f2:
             natural_attrition_rate = st.slider("People who leave for personal reasons (Spouse relocation, etc.) (%)", 0.5, 2.0, 1.0, 0.1, help="People leave for reasons no HR plan can fix. This is that baseline %.")
-
         if st.button("📈 Show Me the 12-Month Projection", type="primary"):
             months = list(range(1, 13)); current_workforce = len(df)
             
-            raw_risk_scores = pipeline.predict_proba(df.drop('left', axis=1))[:, 1]
+            raw_risk_scores = pipeline.predict_proba(df.drop('left', axis=1)[:, 1]
             total_risk_score = calibrate_probability_array(raw_risk_scores, temperature=0.55).sum()
             
             monthly_leavers_no_action = total_risk_score / 12.0
@@ -1458,16 +1461,14 @@ def main():
             forecast_bau = []; forecast_intervention = []; temp_bau = float(current_workforce); temp_int = float(current_workforce)
             for m in months:
                 natural_leavers_bau = temp_bau * (natural_attrition_rate / 100.0); natural_leavers_int = temp_int * (natural_attrition_rate / 100.0)
-                total_leavers_bau = monthly_leavers_no_action + natural_leavers_bau; total_leavers_int = monthly_leavers_with_action + natural_leavers_int
-                temp_bau = max(0, temp_bau - total_leavers_bau); temp_int = max(0, temp_int - total_leavers_int)
-                forecast_bau.append(temp_bau); forecast_intervention.append(temp_int)
+                total_leavers_bau = monthly_leavers_no_action + natural_leavers_bau; total_leavers_intervention.append(temp_bau); forecast_intervention.append(temp_int)
             forecast_df = pd.DataFrame({'Month': months, 'If We Do Nothing (Status Quo)': forecast_bau, 'If We Follow the Plan': forecast_intervention}).melt(id_vars='Month', var_name='Scenario', value_name='Workforce Count')
-            fig_forecast = px.line(forecast_df, x='Month', y='Workforce Count', color='Scenario', title="Projected Workforce Size Over the Next 12 Months", template="plotly_dark", markers=True, color_discrete_map={'If We Do Nothing (Status Quo)': "#EEB76B", 'If We Follow the Plan': "#17B794"})
+            fig_forecast = px.line(forecast_df, x='Month', y='Workforce Count', color='Scenario', title="Projected Workforce Size Over the Next 12 Months", template="plotly_dark", markers=True, color_discrete_map={'If We Do Nothing (Status Quo)': "#EEB76B", 'If We Follow the Plan': "#17B794"}, color_discrete_map={'If We Do Nothing (Status Quo)': "#EEB76B", 'If We Follow the Plan': "#17B794"})
             fig_forecast.update_layout(yaxis_title="Total Employee Headcount", xaxis=dict(dtick=1)); st.plotly_chart(fig_forecast, use_container_width=True)
             saved_employees = forecast_intervention[-1] - forecast_bau[-1]
             
             if 'salary' in df.columns: avg_salary = df['salary'].map({'low': 400000, 'medium': 600000, 'high': 900000}).mean()
-            else: avg_salary = 500000
+            else: avg_salary = 500000 
             
             replacement_cost_per_emp = avg_salary * 0.5; total_money_saved = int(saved_employees) * replacement_cost_per_emp
             st.markdown("---"); st.markdown("### 🏢 HR Director Summary (For Leadership)")
@@ -1477,4 +1478,5 @@ def main():
             st.success(f"**The Bottom Line:** If we execute our 6-month plan and successfully retain just **{intervention_efficacy}%** of our at-risk staff, we will finish the year with **{int(forecast_intervention[-1])} employees** instead of **{int(forecast_bau[-1])}**. This prevents approximately **₹{total_money_saved:,.0f}** in recruitment, onboarding, and lost productivity costs.")
 
 if __name__ == "__main__":
+    main()
     main()
