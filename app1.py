@@ -818,7 +818,7 @@ def main():
                     calibrated_prob = calibrate_probability(raw_prob)
                     pred = 1 if calibrated_prob >= 0.5 else 0
                     if pred == 0: st.success(f"✅ **Correct!** Prediction: Stay")
-                    else: st.error(f"❌ **Incorrect.** Prediction: Leave")
+                    else: st.error(f"❌ **Incorrect.** Prediction: Stay")
                     st.json(sample.to_dict(), expanded=False)
 
         st.markdown("---")
@@ -1053,7 +1053,7 @@ def main():
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
         st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Advanced modules for Strategy, Anomalies, and Recruitment.</p>", unsafe_allow_html=True)
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Model Benchmarking", "🔬 Departmental Strategy Deep Dive", "🕵️ Anomaly Detection", "📊 Retention Priority Matrix", "🎯 The 'Ideal Candidate' Profiler"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Model Benchmarking", "🔬 Departmental Strategy Deep Dive", "⚠️ Blind Spots", "📊 Retention Priority Matrix", "🎯 The 'Ideal Candidate' Profiler"])
         
         with tab1:
             st.subheader("Algorithm Performance Comparison")
@@ -1135,11 +1135,11 @@ def main():
                                         with col: st.markdown(card_html, unsafe_allow_html=True)
 
         # ====================================================================
-        # ANOMALY DETECTION - 100% NATIVE STREAMLIT (NO CUSTOM HTML)
+        # COMPLETELY REBUILT: "Blind Spots" — Zero confusion, 100% actionable
         # ====================================================================
         with tab3:
-            st.subheader("🕵️ Anomaly Detection")
-            st.write("The AI is usually right, but not always. This page shows you the people who surprised us — so you can learn from them and improve.")
+            st.subheader("⚠️ Where Our AI Gets It Wrong")
+            st.caption("No AI is perfect. This page shows you the people it misjudged — so you can catch what the data misses.")
             st.write("")
             
             X_all = df.drop('left', axis=1)
@@ -1149,154 +1149,87 @@ def main():
             cal_probs_anomaly = calibrate_probability_array(raw_probs_anomaly, temperature=0.55)
             y_pred = (cal_probs_anomaly >= 0.5).astype(int)
             
-            happy_indices = np.where((y_pred == 0) & (y_true == 1))[0]
-            loyal_indices = np.where((y_pred == 1) & (y_true == 0))[0]
-            df_happy = df.iloc[happy_indices]
-            df_loyal = df.iloc[loyal_indices]
+            missed_indices = np.where((y_pred == 0) & (y_true == 1))[0]
+            surprise_indices = np.where((y_pred == 1) & (y_true == 0))[0]
+            df_missed = df.iloc[missed_indices]
+            df_surprise = df.iloc[surprise_indices]
             
-            numeric_cols = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
-            stats_avg = df[numeric_cols].mean()
+            # ---- SECTION 1: PEOPLE WE MISSED ----
+            st.markdown("---")
+            st.markdown("### 🚨 People We Missed")
             
-            # Helper: Format a value for HR-friendly display
-            def fmt(col, val):
-                c = col.lower()
-                if 'satisfaction' in c or 'evaluation' in c:
-                    return f"{val:.2f}"
-                elif 'accident' in c or 'promotion' in c:
-                    return "Yes" if val > 0.5 else "No"
-                elif 'hours' in c:
-                    return f"{val:.0f} hrs"
-                elif 'project' in c:
-                    return f"{val:.1f}"
-                elif 'time' in c or 'tenure' in c or 'spend' in c:
-                    return f"{val:.1f} yrs"
-                else:
-                    return f"{val:.1f}"
-            
-            # Helper: Get direction arrow and label
-            def direction(their_val, avg_val):
-                if avg_val == 0:
-                    return "—", "Same"
-                diff = their_val - avg_val
-                if abs(diff) < avg_val * 0.08:
-                    return "→", "About the same"
-                elif diff > 0:
-                    return "⬆️", "Higher than average"
-                else:
-                    return "⬇️", "Lower than average"
-            
-            # ============================================================
-            # HAPPY LEAVERS
-            # ============================================================
-            if len(df_happy) > 0:
-                st.markdown("---")
-                st.markdown("### 🚪 Happy Leavers")
-                st.caption(f"{len(df_happy)} people the AI said would stay — but they left anyway")
+            if len(df_missed) > 0:
+                st.error(f"**{len(df_missed)} people left, and our system thought they would stay.**")
+                st.markdown("**Why does this happen?**")
+                st.markdown("These people looked fine on paper — good satisfaction, normal workload. But they left anyway. This almost always means:")
                 
-                c_count, c_pct = st.columns(2)
-                c_count.metric("Total Found", f"{len(df_happy)}", help="People who left despite a low-risk profile")
-                c_pct.metric("% of All Leavers", f"{(len(df_happy)/max(y_true.sum(),1))*100:.1f}%", help="What fraction of actual leavers were missed by the AI")
+                st.info("🎯 **A competitor offered them a better job.** Our data can't see external offers. If multiple people went to the same competitor, that's a pattern you need to address.")
+                st.info("🏠 **Personal reasons.** Spouse relocation, health issues, or family changes don't show up in HR data.")
+                st.info("😐 **Quiet quitting turned into actual quitting.** They seemed satisfied in surveys but were already mentally checked out.")
                 
-                st.markdown("**How they were different from the average employee:**")
+                st.markdown("**What you should do:**")
+                st.success("1. **Pull the exit interviews** for these {len(df_missed)} people. Look for recurring reasons that our system can't detect.")
+                st.success("2. **Check if they joined a specific competitor.** If yes, you have a poaching problem, not a retention problem.")
+                st.success("3. **Don't blame the AI.** If 15%+ of leavers were missed, it means your data is missing something important — consider adding new survey questions.")
                 
-                happy_mean = df_happy[numeric_cols].mean()
-                diffs = []
-                for col in numeric_cols:
-                    avg_val = stats_avg[col]
-                    their_val = happy_mean[col]
-                    if avg_val == 0:
-                        pct = 0
-                    else:
-                        pct = ((their_val - avg_val) / avg_val) * 100
-                    diffs.append((col, their_val, avg_val, pct))
-                diffs.sort(key=lambda x: abs(x[3]), reverse=True)
-                
-                for col, their_val, avg_val, pct in diffs[:4]:
-                    arrow, label = direction(their_val, avg_val)
-                    their_fmt = fmt(col, their_val)
-                    avg_fmt = fmt(col, avg_val)
-                    col_name = col.replace('_', ' ').title()
-                    
-                    if "Higher" in label:
-                        st.success(f"**{col_name}**: {their_fmt} {arrow} (Average: {avg_fmt}) — *{label}*")
-                    elif "Lower" in label:
-                        st.warning(f"**{col_name}**: {their_fmt} {arrow} (Average: {avg_fmt}) — *{label}*")
-                    else:
-                        st.info(f"**{col_name}**: {their_fmt} {arrow} (Average: {avg_fmt}) — *{label}*")
-                
-                st.markdown("---")
-                st.markdown("**❓ Questions to investigate right now:**")
-                st.info("🔎 **Were they poached?** Check if they joined a competitor or a company offering significantly higher pay.")
-                st.info("🏠 **Was it personal?** Spouse relocation, health issues, or family reasons often don't show up in our data.")
-                st.info("📋 **Check exit interviews.** Look for recurring themes that our data doesn't capture (e.g., bad manager, toxic team culture).")
-                st.info("💡 **Update the AI.** If you find a common pattern, tell us — we can add new data fields to catch these cases earlier.")
-                
-                with st.expander("📋 View sample employee records"):
-                    st.dataframe(df_happy.head(5), use_container_width=True)
+                with st.expander("📋 See who we missed"):
+                    st.dataframe(df_missed.head(10), use_container_width=True)
             else:
-                st.markdown("---")
-                st.success("🚪 **No Happy Leavers found.** The AI correctly predicted everyone who left.")
+                st.success("✅ **Nobody was missed.** The AI correctly predicted every person who left.")
+
+            # ---- SECTION 2: WALKING TIME BOMBS ----
+            st.markdown("---")
+            st.markdown("### ⏰ Walking Time Bombs")
             
-            # ============================================================
-            # LOYAL SUFFERERS
-            # ============================================================
-            if len(df_loyal) > 0:
-                st.markdown("---")
-                st.markdown("### 🛡️ Loyal Sufferers")
-                st.caption(f"{len(df_loyal)} people the AI said would leave — but they're still here")
+            if len(df_surprise) > 0:
+                st.warning(f"**{len(df_surprise)} people look like they should leave any day now — but they haven't.**")
+                st.markdown("**Why haven't they left yet?**")
+                st.markdown("Their profile screams 'high risk' — low satisfaction, overworked, no promotion. But they're still here. The most common reasons:")
                 
-                c_count2, c_pct2 = st.columns(2)
-                c_count2.metric("Total Found", f"{len(df_loyal)}", help="People who stayed despite a high-risk profile")
-                c_pct2.metric("% of All Stayers", f"{(len(df_loyal)/max(len(y_true)-y_true.sum(),1))*100:.1f}%", help="What fraction of people who stayed were actually high-risk")
+                st.error("⛓️ **Golden handcuffs.** Their salary, stock options, or benefits are too good to walk away from — even though they're unhappy. They'll leave the moment someone matches the pay.")
+                st.error("🔍 **No better option right now.** They want to leave but can't find another job in this market. The moment the job market improves, they're gone.")
+                st.error("🔇 **They've already given up.** They're doing the bare minimum work (quiet quitting). They're not a flight risk — they're already gone mentally. They just haven't updated their resume yet.")
                 
-                st.markdown("**How they were different from the average employee:**")
+                st.markdown("**What you should do THIS WEEK:**")
+                st.success("1. **Do NOT ignore them.** The fact that they haven't left yet is a gift — you still have time to act.")
+                st.success("2. **Have a real conversation.** Not a survey — an actual 1-on-1. Ask: 'What would make you want to stay here for another 2 years?'")
+                st.success("3. **Check their manager.** In most cases, people don't leave companies — they leave bad managers. If multiple time bombs report to the same manager, that's your real problem.")
+                st.success("4. **Fix the easiest thing first.** If it's a pay issue, a market adjustment is cheaper than replacement. If it's a workload issue, redistribute projects. Don't overthink it.")
                 
-                loyal_mean = df_loyal[numeric_cols].mean()
-                diffs2 = []
-                for col in numeric_cols:
-                    avg_val = stats_avg[col]
-                    their_val = loyal_mean[col]
-                    if avg_val == 0:
-                        pct = 0
-                    else:
-                        pct = ((their_val - avg_val) / avg_val) * 100
-                    diffs2.append((col, their_val, avg_val, pct))
-                diffs2.sort(key=lambda x: abs(x[3]), reverse=True)
-                
-                for col, their_val, avg_val, pct in diffs2[:4]:
-                    arrow, label = direction(their_val, avg_val)
-                    their_fmt = fmt(col, their_val)
-                    avg_fmt = fmt(col, avg_val)
-                    col_name = col.replace('_', ' ').title()
-                    
-                    if "Higher" in label:
-                        st.success(f"**{col_name}**: {their_fmt} {arrow} (Average: {avg_fmt}) — *{label}*")
-                    elif "Lower" in label:
-                        st.warning(f"**{col_name}**: {their_fmt} {arrow} (Average: {avg_fmt}) — *{label}*")
-                    else:
-                        st.info(f"**{col_name}**: {their_fmt} {arrow} (Average: {avg_fmt}) — *{label}*")
-                
-                st.markdown("---")
-                st.markdown("**⚠️ Why are they still here? Most likely reasons:**")
-                st.error("⛓️ **'Golden Handcuffs'** — Good benefits, bonuses, or stock options make leaving financially painful, even if they're unhappy.")
-                st.error("🔍 **No better options** — They may want to leave but can't find another job in the current market.")
-                st.error("🔇 **'Quiet Quitters'** — They've mentally checked out. They do the minimum required work but aren't engaged. High flight risk if the job market improves.")
-                
-                st.markdown("**💡 What you should do this week:**")
-                st.info("📅 **Schedule 1-on-1 meetings** with these employees. Don't mention the AI — just ask how they're doing and what would make their work better.")
-                st.info("📊 **Check their recent performance.** Are their numbers dropping? That's a sign they've already checked out.")
-                st.info("💼 **Review their compensation.** If they're underpaid relative to the market, that's your most powerful lever to keep them.")
-                
-                with st.expander("📋 View sample employee records"):
-                    st.dataframe(df_loyal.head(5), use_container_width=True)
+                with st.expander("📋 See who's at risk"):
+                    st.dataframe(df_surprise.head(10), use_container_width=True)
             else:
+                st.success("✅ **No hidden risks.** Everyone the AI flagged as high-risk actually left. The model is well-calibrated.")
+
+            # ---- SECTION 3: THE BOTTOM LINE ----
+            if len(df_missed) > 0 or len(df_surprise) > 0:
                 st.markdown("---")
-                st.success("🛡️ **No Loyal Sufferers found.** Everyone the AI flagged as high-risk actually left. The model is well-calibrated.")
-            
-            if len(df_happy) == 0 and len(df_loyal) == 0:
+                st.markdown("### 💡 The Bottom Line")
+                
+                missed_pct = (len(df_missed) / max(y_true.sum(), 1)) * 100
+                surprise_pct = (len(df_surprise) / max(len(y_true) - y_true.sum(), 1)) * 100
+                
+                col_bl1, col_bl2 = st.columns(2)
+                col_bl1.metric("Missed Leavers", f"{missed_pct:.1f}%", help="Of all people who left, what % did the AI not predict?")
+                col_bl2.metric("Hidden Risks", f"{surprise_pct:.1f}%", help="Of all people who stayed, what % are actually high-risk?")
+                
+                if missed_pct > 20:
+                    st.error("**Your data has a blind spot.** Too many people are leaving for reasons the AI can't see. Start doing stay interviews to understand what's missing from your data.")
+                elif missed_pct > 10:
+                    st.warning("**Some blind spots exist.** A few people slipped through. Review their exit interviews to find the pattern.")
+                else:
+                    st.success("**Your data captures the real reasons well.** The AI catches most leavers. Keep it up.")
+                
+                if surprise_pct > 15:
+                    st.error("**You have a large silent risk group.** Many unhappy people are hiding in plain sight. Prioritize 1-on-1s with these employees before the market improves.")
+                elif surprise_pct > 5:
+                    st.warning("**A small group needs attention.** Not urgent, but worth having conversations with these people sooner rather than later.")
+                else:
+                    st.success("**No silent risk group.** People who look risky actually leave. The model is honest.")
+            else:
                 st.markdown("---")
                 st.balloons()
-                st.success("🎯 **Perfect score!** The AI's predictions matched reality for every single employee.")
+                st.success("🎯 **Perfect score!** The AI predicted every single person correctly. No blind spots found.")
 
         with tab4:
             st.subheader("📊 Retention Priority Matrix")
