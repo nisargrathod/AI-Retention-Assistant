@@ -818,7 +818,7 @@ def main():
                     calibrated_prob = calibrate_probability(raw_prob)
                     pred = 1 if calibrated_prob >= 0.5 else 0
                     if pred == 0: st.success(f"✅ **Correct!** Prediction: Stay")
-                    else: st.error(f"❌ **Incorrect.** Prediction: Stay")
+                    else: st.error(f"❌ **Incorrect.** Prediction: Leave")
                     st.json(sample.to_dict(), expanded=False)
 
         st.markdown("---")
@@ -1052,8 +1052,8 @@ def main():
 
     if page == "AI Research Lab":
         st.header("🧪 AI Research Lab")
-        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Advanced modules for Strategy, Anomalies, and Recruitment.</p>", unsafe_allow_html=True)
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Model Benchmarking", "🔬 Departmental Strategy Deep Dive", "⚠️ Blind Spots", "📊 Retention Priority Matrix", "🎯 The 'Ideal Candidate' Profiler"])
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Advanced modules for Strategy, Disruption, and Recruitment.</p>", unsafe_allow_html=True)
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Model Benchmarking", "🔬 Departmental Strategy Deep Dive", "🛡️ AI Disruption Defense", "📊 Retention Priority Matrix", "🎯 The 'Ideal Candidate' Profiler"])
         
         with tab1:
             st.subheader("Algorithm Performance Comparison")
@@ -1135,101 +1135,109 @@ def main():
                                         with col: st.markdown(card_html, unsafe_allow_html=True)
 
         # ====================================================================
-        # COMPLETELY REBUILT: "Blind Spots" — Zero confusion, 100% actionable
+        # NEW TAB: AI DISRUPTION DEFENSE
         # ====================================================================
         with tab3:
-            st.subheader("⚠️ Where Our AI Gets It Wrong")
-            st.caption("No AI is perfect. This page shows you the people it misjudged — so you can catch what the data misses.")
+            st.subheader("🛡️ AI Disruption Defense")
+            st.caption("Prove to leadership that reskilling is cheaper than mass layoffs.")
+            
+            st.error("**The Fear:** CEO asks, 'Can we just replace half the team with AI tools?'")
+            st.success("**The Reality:** AI replaces *tasks*, not jobs. And layoffs cost way more than you think.")
             st.write("")
             
-            X_all = df.drop('left', axis=1)
-            y_true = df['left']
+            # ---- SECTION 1: VULNERABILITY ASSESSMENT ----
+            if 'Department' in df.columns and 'satisfaction_level' in df.columns:
+                st.markdown("### Step 1: Department Vulnerability Assessment")
+                st.write("AI can easily replace repetitive, low-satisfaction tasks. It struggles with complex, high-judgment tasks. We use your existing HR data to estimate which departments have roles most vulnerable to AI automation.")
+                
+                dept_vuln = []
+                for dept in df['Department'].unique():
+                    dept_data = df[df['Department'] == dept]
+                    avg_sat = dept_data['satisfaction_level'].mean()
+                    avg_eval = dept_data['last_evaluation'].mean() if 'last_evaluation' in dept_data.columns else 0.5
+                    avg_tenure = dept_data['time_spend_company'].mean() if 'time_spend_company' in dept_data.columns else 3.0
+                    
+                    vuln_score = ((1 - avg_sat) * 40) + ((1 - avg_eval) * 30) + ((1 - (avg_tenure/10)) * 30)
+                    dept_vuln.append({'Department': dept, 'Vulnerability Score': round(vuln_score), 'Employees': len(dept_data)})
+                
+                vuln_df = pd.DataFrame(dept_vuln).sort_values('Vulnerability Score', ascending=False)
+                
+                fig_vuln = px.bar(vuln_df, x='Vulnerability Score', y='Department', orientation='h', 
+                                  title="Which departments have roles most easily replaced by AI?",
+                                  color='Vulnerability Score', color_continuous_scale=['#17B794', '#EEB76B'],
+                                  template="plotly_dark", height=400)
+                fig_vuln.update_layout(xaxis_title="0 = Safe (Complex Work) | 100 = At Risk (Repetitive Work)", yaxis_title="", margin=dict(l=0, r=0, t=40, b=0))
+                st.plotly_chart(fig_vuln, use_container_width=True)
+                
+                st.info("**How to read this:** A score of 70+ means the department likely has many repetitive tasks (data entry, basic support). A score under 30 means the work is too complex for current AI.")
             
-            raw_probs_anomaly = pipeline.predict_proba(X_all)[:, 1]
-            cal_probs_anomaly = calibrate_probability_array(raw_probs_anomaly, temperature=0.55)
-            y_pred = (cal_probs_anomaly >= 0.5).astype(int)
-            
-            missed_indices = np.where((y_pred == 0) & (y_true == 1))[0]
-            surprise_indices = np.where((y_pred == 1) & (y_true == 0))[0]
-            df_missed = df.iloc[missed_indices]
-            df_surprise = df.iloc[surprise_indices]
-            
-            # ---- SECTION 1: PEOPLE WE MISSED ----
+            # ---- SECTION 2: THE FINANCIAL CALCULATOR ----
             st.markdown("---")
-            st.markdown("### 🚨 People We Missed")
+            st.markdown("### Step 2: The Billion-Rupee Calculator (Reskill vs. Layoff)")
+            st.write("Before approving layoffs, run these numbers. The math almost always favors reskilling.")
+            st.write("")
             
-            if len(df_missed) > 0:
-                st.error(f"**{len(df_missed)} people left, and our system thought they would stay.**")
-                st.markdown("**Why does this happen?**")
-                st.markdown("These people looked fine on paper — good satisfaction, normal workload. But they left anyway. This almost always means:")
-                
-                st.info("🎯 **A competitor offered them a better job.** Our data can't see external offers. If multiple people went to the same competitor, that's a pattern you need to address.")
-                st.info("🏠 **Personal reasons.** Spouse relocation, health issues, or family changes don't show up in HR data.")
-                st.info("😐 **Quiet quitting turned into actual quitting.** They seemed satisfied in surveys but were already mentally checked out.")
-                
-                st.markdown("**What you should do:**")
-                st.success("1. **Pull the exit interviews** for these {len(df_missed)} people. Look for recurring reasons that our system can't detect.")
-                st.success("2. **Check if they joined a specific competitor.** If yes, you have a poaching problem, not a retention problem.")
-                st.success("3. **Don't blame the AI.** If 15%+ of leavers were missed, it means your data is missing something important — consider adding new survey questions.")
-                
-                with st.expander("📋 See who we missed"):
-                    st.dataframe(df_missed.head(10), use_container_width=True)
-            else:
-                st.success("✅ **Nobody was missed.** The AI correctly predicted every person who left.")
-
-            # ---- SECTION 2: WALKING TIME BOMBS ----
+            c_inp1, c_inp2 = st.columns(2)
+            with c_inp1:
+                num_employees = st.number_input("How many employees are at risk of AI replacement?", min_value=5, max_value=500, value=50, step=5)
+                avg_salary = st.number_input("Their average annual salary (₹)", min_value=200000, max_value=3000000, value=600000, step=50000)
+            
+            with c_inp2:
+                st.markdown("**Industry Standard Costs:**")
+                st.caption("Severance: 3 months salary | Hiring AI Engineer: 2x salary | Training: 1.5x salary | Morale dip: 1 month salary")
+            
             st.markdown("---")
-            st.markdown("### ⏰ Walking Time Bombs")
             
-            if len(df_surprise) > 0:
-                st.warning(f"**{len(df_surprise)} people look like they should leave any day now — but they haven't.**")
-                st.markdown("**Why haven't they left yet?**")
-                st.markdown("Their profile screams 'high risk' — low satisfaction, overworked, no promotion. But they're still here. The most common reasons:")
-                
-                st.error("⛓️ **Golden handcuffs.** Their salary, stock options, or benefits are too good to walk away from — even though they're unhappy. They'll leave the moment someone matches the pay.")
-                st.error("🔍 **No better option right now.** They want to leave but can't find another job in this market. The moment the job market improves, they're gone.")
-                st.error("🔇 **They've already given up.** They're doing the bare minimum work (quiet quitting). They're not a flight risk — they're already gone mentally. They just haven't updated their resume yet.")
-                
-                st.markdown("**What you should do THIS WEEK:**")
-                st.success("1. **Do NOT ignore them.** The fact that they haven't left yet is a gift — you still have time to act.")
-                st.success("2. **Have a real conversation.** Not a survey — an actual 1-on-1. Ask: 'What would make you want to stay here for another 2 years?'")
-                st.success("3. **Check their manager.** In most cases, people don't leave companies — they leave bad managers. If multiple time bombs report to the same manager, that's your real problem.")
-                st.success("4. **Fix the easiest thing first.** If it's a pay issue, a market adjustment is cheaper than replacement. If it's a workload issue, redistribute projects. Don't overthink it.")
-                
-                with st.expander("📋 See who's at risk"):
-                    st.dataframe(df_surprise.head(10), use_container_width=True)
+            # Layoff Math
+            severance_cost = (avg_salary / 12) * 3 * num_employees
+            new_hire_cost = (avg_salary * 2) * (num_employees * 0.1) # Assume we need AI talent for 10% of headcount
+            total_layoff_cost = severance_cost + new_hire_cost
+            
+            # Reskill Math
+            training_cost = (avg_salary / 12) * 1.5 * num_employees
+            productivity_dip = (avg_salary / 12) * 1 * num_employees # 1 month of half productivity
+            total_reskill_cost = training_cost + productivity_dip
+            
+            savings = total_layoff_cost - total_reskill_cost
+            
+            c_res1, c_res2, c_res3 = st.columns(3)
+            c_res1.metric("Total Cost of Layoffs", f"₹{total_layoff_cost/10000000:.2f} Cr")
+            c_res2.metric("Total Cost of Reskilling", f"₹{total_reskill_cost/10000000:.2f} Cr")
+            c_res3.metric("Money Saved by Reskilling", f"₹{savings/10000000:.2f} Cr", delta="Reskill wins")
+            
+            st.markdown("---")
+            
+            if savings > 0:
+                st.success(f"**The Verdict: Reskill.** By choosing to reskill instead of laying off, you save ₹{savings/10000000:.2f} Crores. You also avoid the hidden costs of layoffs: loss of institutional knowledge, drop in team morale, and damage to your employer brand.")
             else:
-                st.success("✅ **No hidden risks.** Everyone the AI flagged as high-risk actually left. The model is well-calibrated.")
+                st.warning(f"**The Verdict: Layoffs are technically cheaper here.** However, consider the hidden costs of layoffs (brand damage, legal risks, remaining team burnout) before proceeding.")
+            
+            # ---- SECTION 3: AI STRATEGY MEMO ----
+            if st.button("✍️ Generate Strategy Memo for CEO", type="primary", key="gen_ai_memo"):
+                with st.spinner("Drafting strategy memo..."):
+                    try:
+                        api_key = st.secrets.get("GROQ_API_KEY", None)
+                        if api_key:
+                            llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.5)
+                            template = """You are an HR Director writing to the CEO. Keep it strictly under 400 words. Use bullet points. No fluff.
 
-            # ---- SECTION 3: THE BOTTOM LINE ----
-            if len(df_missed) > 0 or len(df_surprise) > 0:
-                st.markdown("---")
-                st.markdown("### 💡 The Bottom Line")
-                
-                missed_pct = (len(df_missed) / max(y_true.sum(), 1)) * 100
-                surprise_pct = (len(df_surprise) / max(len(y_true) - y_true.sum(), 1)) * 100
-                
-                col_bl1, col_bl2 = st.columns(2)
-                col_bl1.metric("Missed Leavers", f"{missed_pct:.1f}%", help="Of all people who left, what % did the AI not predict?")
-                col_bl2.metric("Hidden Risks", f"{surprise_pct:.1f}%", help="Of all people who stayed, what % are actually high-risk?")
-                
-                if missed_pct > 20:
-                    st.error("**Your data has a blind spot.** Too many people are leaving for reasons the AI can't see. Start doing stay interviews to understand what's missing from your data.")
-                elif missed_pct > 10:
-                    st.warning("**Some blind spots exist.** A few people slipped through. Review their exit interviews to find the pattern.")
-                else:
-                    st.success("**Your data captures the real reasons well.** The AI catches most leavers. Keep it up.")
-                
-                if surprise_pct > 15:
-                    st.error("**You have a large silent risk group.** Many unhappy people are hiding in plain sight. Prioritize 1-on-1s with these employees before the market improves.")
-                elif surprise_pct > 5:
-                    st.warning("**A small group needs attention.** Not urgent, but worth having conversations with these people sooner rather than later.")
-                else:
-                    st.success("**No silent risk group.** People who look risky actually leave. The model is honest.")
-            else:
-                st.markdown("---")
-                st.balloons()
-                st.success("🎯 **Perfect score!** The AI predicted every single person correctly. No blind spots found.")
+                            **Context:**
+                            - We analyzed {num_employees} employees at risk of AI automation.
+                            - Layoff + rehiring AI talent costs: ₹{total_layoff_cost/10000000:.1f} Cr.
+                            - Reskilling the same team costs: ₹{total_reskill_cost/10000000:.1f} Cr.
+                            - Reskilling saves us ₹{savings/10000000:.1f} Cr.
+                            - Layoffs cause hidden costs: institutional knowledge loss, 30% drop in remaining team morale, employer brand damage.
+
+                            **Task:**
+                            Recommend reskilling. Briefly explain why layoffs are a trap for companies in our stage. Propose a 6-month pilot reskilling program."""
+                            prompt = PromptTemplate.from_template(template)
+                            chain = prompt | llm | StrOutputParser()
+                            response = chain.invoke({"num_employees": num_employees, "total_layoff_cost": f"₹{total_layoff_cost/10000000:.1f} Cr", "total_reskill_cost": f"₹{total_reskill_cost/10000000:.1f} Cr", "savings": f"₹{savings/10000000:.1f} Cr"})
+                            st.markdown(f"<div class='llm-response'>{response}</div>", unsafe_allow_html=True)
+                        else:
+                            st.warning("🔑 API Key missing. Showing generic template.")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
 
         with tab4:
             st.subheader("📊 Retention Priority Matrix")
