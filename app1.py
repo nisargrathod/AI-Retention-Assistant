@@ -705,7 +705,7 @@ def main():
                         st.session_state['global_pipeline'] = global_pipeline; st.session_state['global_df'] = final_df
                         st.session_state['global_X_train'] = X_train_g; st.session_state['global_X_test'] = X_test_g
                         st.session_state['global_y_train'] = y_train_g; st.session_state['global_y_test'] = y_test_g; st.session_state['is_global'] = True
-                        st.balloons(); st.success(f"🎉 Training Complete! Accuracy: **{acc:.1%}**.")
+                        st.success(f"🎉 Training Complete! Accuracy: **{acc:.1%}**.")
                         st.info("Go to **'Predict Attrition'** or **'Why They Leave'** to use your data!")
             except Exception as e: st.error(f"Error: {e}")
         if st.button("🔄 Reset to Default Demo Data"):
