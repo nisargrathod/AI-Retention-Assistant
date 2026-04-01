@@ -1006,6 +1006,143 @@ def main():
     if page == "Budget Planner":
         st.markdown("<h1 style='margin-bottom: 5px;'>💰 Budget Planner</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af; margin-bottom: 30px;'>Data-driven decision support for HR.</p>", unsafe_allow_html=True)
+        
+        # ====================================================================
+        # NEW FEATURE: TRUE COST OF TURNOVER
+        # ====================================================================
+        st.markdown("### 💸 The True Cost of Turnover")
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Translating attrition rates into hard numbers. <em>The question it answers: \"How much money are we actually losing, and where?\"</em></p>", unsafe_allow_html=True)
+        
+        if 'Department' in df.columns:
+            # Map salaries to actual monetary values
+            if 'salary' in df.columns:
+                salary_map = {'low': 400000, 'medium': 600000, 'high': 900000}
+                df_cost = df.copy()
+                df_cost['annual_salary'] = df_cost['salary'].map(salary_map)
+            else:
+                df_cost = df.copy()
+                df_cost['annual_salary'] = 500000  # Default fallback
+            
+            # Filter employees who left
+            df_left = df_cost[df_cost['left'] == 1].copy()
+            
+            if len(df_left) > 0:
+                # 1. Recruiting Cost (Agency fees, job postings, interviewing time) = 20% of salary
+                df_left['recruiting_cost'] = df_left['annual_salary'] * 0.20
+                
+                # 2. Onboarding Cost (Training time, lost productivity for ~3 months) = 30% of salary
+                df_left['onboarding_cost'] = df_left['annual_salary'] * 0.30
+                
+                # 3. Knowledge Loss Cost (Value of experience walking out the door)
+                # Logic: 10% of salary multiplied by years of tenure (capped at 50% to be conservative)
+                if 'time_spend_company' in df_left.columns:
+                    df_left['knowledge_loss_pct'] = (df_left['time_spend_company'] * 0.10).clip(upper=0.50)
+                    df_left['knowledge_loss_cost'] = df_left['annual_salary'] * df_left['knowledge_loss_pct']
+                else:
+                    df_left['knowledge_loss_cost'] = df_left['annual_salary'] * 0.30  # Default 30%
+                
+                df_left['total_cost'] = df_left['recruiting_cost'] + df_left['onboarding_cost'] + df_left['knowledge_loss_cost']
+                
+                # Aggregate by department
+                dept_costs = df_left.groupby('Department').agg(
+                    employees_left=('left', 'count'),
+                    total_recruiting=('recruiting_cost', 'sum'),
+                    total_onboarding=('onboarding_cost', 'sum'),
+                    total_knowledge_loss=('knowledge_loss_cost', 'sum'),
+                    total_cost=('total_cost', 'sum'),
+                    avg_salary=('annual_salary', 'mean')
+                ).reset_index()
+                
+                dept_costs = dept_costs.sort_values('total_cost', ascending=False)
+                
+                # Grand Totals
+                grand_total = dept_costs['total_cost'].sum()
+                total_employees_left = dept_costs['employees_left'].sum()
+                avg_cost_per_exit = grand_total / total_employees_left if total_employees_left > 0 else 0
+                
+                # Shock Value Metrics
+                c_shock1, c_shock2, c_shock3 = st.columns(3)
+                c_shock1.metric("Total Money Lost to Attrition", f"₹{grand_total/10000000:.2f} Cr", delta=f"{total_employees_left} Employees Left", delta_color="inverse")
+                c_shock2.metric("Avg. Cost Per Employee Exit", f"₹{avg_cost_per_exit:,.0f}", delta="Replace vs. Retain")
+                c_shock3.metric("Most Expensive Dept.", dept_costs.iloc[0]['Department'], delta=f"₹{dept_costs.iloc[0]['total_cost']/10000000:.2f} Cr Lost", delta_color="inverse")
+                
+                # Stacked Bar Chart
+                dept_costs_melted = dept_costs.melt(
+                    id_vars=['Department', 'employees_left', 'total_cost'],
+                    value_vars=['total_recruiting', 'total_onboarding', 'total_knowledge_loss'],
+                    var_name='Cost Type',
+                    value_name='Amount (₹)'
+                )
+                
+                cost_type_names = {
+                    'total_recruiting': 'Recruiting Cost (Agency/Postings)',
+                    'total_onboarding': 'Onboarding Cost (Training/Lost Prod.)',
+                    'total_knowledge_loss': 'Knowledge Loss (Exp. Walking Out)'
+                }
+                dept_costs_melted['Cost Type'] = dept_costs_melted['Cost Type'].map(cost_type_names)
+                
+                fig_cost = px.bar(
+                    dept_costs_melted,
+                    x='Department',
+                    y='Amount (₹)',
+                    color='Cost Type',
+                    title="Attrition Cost Breakdown by Department",
+                    template="plotly_dark",
+                    color_discrete_map={
+                        'Recruiting Cost (Agency/Postings)': '#FF4B4B',
+                        'Onboarding Cost (Training/Lost Prod.)': '#EEB76B',
+                        'Knowledge Loss (Exp. Walking Out)': '#9C3D54'
+                    }
+                )
+                fig_cost.update_layout(
+                    xaxis_title="",
+                    yaxis_title="Cost in Rupees (₹)",
+                    legend_title="",
+                    height=550,
+                    yaxis=dict(tickformat=',.0f'),
+                    xaxis={'categoryorder': 'total descending'}
+                )
+                custome_layout(fig_cost, title_size=24, showlegend=True)
+                st.plotly_chart(fig_cost, use_container_width=True)
+                
+                # Executive Talking Points (Shock Value Statements)
+                st.markdown("---")
+                st.markdown("### 💡 Executive Talking Points (For Your Next Budget Meeting)")
+                st.markdown("<p style='color: #9ca3af; margin-bottom: 15px;'>Use these data-backed statements to secure budget approval:</p>", unsafe_allow_html=True)
+                
+                for _, row in dept_costs.head(3).iterrows():
+                    dept_name = row['Department']
+                    total_dept_cost = row['total_cost']
+                    total_dept_salary = row['avg_salary'] * row['employees_left']
+                    
+                    if total_dept_cost > total_dept_salary:
+                        comparison = f"That's <strong style='color: #FF4B4B;'>MORE</strong> than the combined salaries of everyone who left."
+                    else:
+                        pct = (total_dept_cost / total_dept_salary) * 100
+                        comparison = f"That's <strong style='color: #EEB76B;'>{pct:.0f}%</strong> of the combined salaries of everyone who left."
+                    
+                    st.markdown(f"""
+                    <div class="custom-card" style="border-left: 4px solid #FF4B4B;">
+                        <h4 style="color: #FF4B4B; margin-top: 0;">{dept_name} Department</h4>
+                        <p style="color: #e6edf3; font-size: 1.1rem; font-weight: 600; margin-bottom: 5px;">
+                            Attrition cost us <strong>₹{total_dept_cost/10000000:.2f} Crores</strong> last year.
+                        </p>
+                        <p style="color: #9ca3af; font-size: 0.9rem;">
+                            {row['employees_left']} employees left. {comparison}
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.info(f"💡 **Bottom Line:** The cost of doing nothing is <strong>₹{grand_total/10000000:.2f} Crores</strong>. Use the Optimization Tool below to see how a small retention investment can prevent these losses.")
+            else:
+                st.warning("No historical attrition data found (all employees marked as 'Stayed' in this dataset).")
+        else:
+            st.warning("Department column not found in this dataset. Cannot calculate departmental turnover costs.")
+        
+        st.markdown("---")
+        # ====================================================================
+        # EXISTING FEATURE: BUDGET OPTIMIZATION TOOL
+        # ====================================================================
         analyze_why_people_leave(df)
         st.markdown("---"); st.markdown("### 💰 Budget Optimization Tool")
         col1, col2 = st.columns([2, 1])
