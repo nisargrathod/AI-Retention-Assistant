@@ -1137,44 +1137,174 @@ def main():
                                         card_html = f"<div class='custom-card' style='border-top: 4px solid #17B794;'><div style='display: flex; align-items: center; margin-bottom: 10px;'><span style='font-size: 1.5rem; margin-right: 10px;'>{icon}</span><h4 style='margin: 0; color: #fff;'>{title}</h4></div><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{advice}</p><small style='color: #8b949e;'>Driver: {feature_name.replace('_', ' ').title()}</small></div>"
                                         with col: st.markdown(card_html, unsafe_allow_html=True)
 
+        # ====================================================================
+        # FIXED: Anomaly Detection - Replaced confusing radar chart
+        # ====================================================================
         with tab3:
             st.subheader("🕵️ Anomaly Detection")
-            st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Discover the people who defy the AI's logic.<br><br><strong>🚪 Happy Leavers:</strong> Employees the AI predicted would STAY, but LEFT.<br><strong>🛡️ Loyal Sufferers:</strong> Employees the AI predicted would LEAVE, but STAYED.</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Discover the people who defy the AI's logic.</p>", unsafe_allow_html=True)
+            
+            # Clear explanation cards
+            c_exp1, c_exp2 = st.columns(2)
+            with c_exp1:
+                st.markdown("""
+                <div class="custom-card" style="border-left: 4px solid #EEB76B;">
+                    <h4 style="color: #EEB76B; margin-top: 0;">🚪 Happy Leavers</h4>
+                    <p style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 0;">The AI said <strong>"Stay"</strong>, but they <strong>Left</strong>.<br>
+                    <span style="color: #8b949e; font-size: 0.8rem;">Why? Poaching? Spouse relocation? Factors outside our data?</span></p>
+                </div>
+                """, unsafe_allow_html=True)
+            with c_exp2:
+                st.markdown("""
+                <div class="custom-card" style="border-left: 4px solid #FF4B4B;">
+                    <h4 style="color: #FF4B4B; margin-top: 0;">🛡️ Loyal Sufferers</h4>
+                    <p style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 0;">The AI said <strong>"Leave"</strong>, but they <strong>Stayed</strong>.<br>
+                    <span style="color: #8b949e; font-size: 0.8rem;">Golden handcuffs? No better options? Silent quitters?</span></p>
+                </div>
+                """, unsafe_allow_html=True)
+            
             X_all = df.drop('left', axis=1); y_true = df['left']
             
             raw_probs_anomaly = pipeline.predict_proba(X_all)[:, 1]
             cal_probs_anomaly = calibrate_probability_array(raw_probs_anomaly, temperature=0.55)
             y_pred = (cal_probs_anomaly >= 0.5).astype(int)
             
-            happy_leavers_indices = np.where((y_pred == 0) & (y_true == 1))[0]; df_happy_leavers = df.iloc[happy_leavers_indices]
-            loyal_sufferers_indices = np.where((y_pred == 1) & (y_true == 0))[0]; df_loyal_sufferers = df.iloc[loyal_sufferers_indices]
+            happy_leavers_indices = np.where((y_pred == 0) & (y_true == 1))[0]
+            df_happy_leavers = df.iloc[happy_leavers_indices]
+            loyal_sufferers_indices = np.where((y_pred == 1) & (y_true == 0))[0]
+            df_loyal_sufferers = df.iloc[loyal_sufferers_indices]
             
-            numeric_cols_anomaly = df.select_dtypes(include=np.number).columns.tolist()
+            # FIX 1: Exclude 'left' column from comparison
+            numeric_cols_anomaly = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
+            
             def get_profile_stats(df_group):
                 if len(df_group) == 0: return None
                 return df_group[numeric_cols_anomaly].mean()
 
-            stats_happy = get_profile_stats(df_happy_leavers); stats_loyal = get_profile_stats(df_loyal_sufferers); stats_avg = get_profile_stats(df)
-            comparison_df = pd.DataFrame({'Company Average': stats_avg, 'Happy Leavers': stats_happy, 'Loyal Sufferers': stats_loyal}).T
+            stats_avg = get_profile_stats(df)
+            stats_happy = get_profile_stats(df_happy_leavers)
+            stats_loyal = get_profile_stats(df_loyal_sufferers)
+            
+            # Show the actual employee records
             col_a, col_b = st.columns(2)
             with col_a:
-                st.markdown("### 🚪 The Happy Leavers"); st.caption(f"Count: {len(df_happy_leavers)} employees")
+                st.markdown("### 🚪 Happy Leavers")
+                st.caption(f"Found: {len(df_happy_leavers)} employees")
                 if len(df_happy_leavers) > 0:
-                    st.info("**Insight:** These people had good stats but left anyway.\n**Action:** Review these specific profiles. Was it poaching? Spouse relocation? The AI couldn't predict it because it wasn't in the data.")
-                    st.dataframe(df_happy_leavers.head(), use_container_width=True)
-                else: st.success("✅ No anomalies found. The model predicted all leavers correctly.")
+                    st.dataframe(df_happy_leavers.head(5), use_container_width=True)
+                else:
+                    st.success("✅ None found. The model predicted all leavers correctly.")
             with col_b:
-                st.markdown("### 🛡️ The Loyal Sufferers"); st.caption(f"Count: {len(df_loyal_sufferers)} employees")
+                st.markdown("### 🛡️ Loyal Sufferers")
+                st.caption(f"Found: {len(df_loyal_sufferers)} employees")
                 if len(df_loyal_sufferers) > 0:
-                    st.warning("**Insight:** These people have high-risk profiles but haven't left yet.\n**Action:** Why are they staying? Are they 'golden handcuffed' by benefits? Or do they lack options? They are high risk if the job market opens up.")
-                    st.dataframe(df_loyal_sufferers.head(), use_container_width=True)
-                else: st.success("✅ No anomalies found.")
-            if stats_happy is not None or stats_loyal is not None:
-                st.markdown("---"); st.subheader("📊 Anomaly Profile Comparison")
-                max_vals = stats_avg.abs().max(); norm_df = comparison_df.div(max_vals)
-                norm_df = norm_df.reset_index().melt(id_vars='index', var_name='Metric', value_name='Value'); norm_df.rename(columns={'index': 'Group'}, inplace=True)
-                fig = px.line_polar(norm_df, r='Value', theta='Metric', color='Group', line_close=True, template="plotly_dark", color_discrete_map={'Company Average': '#9ca3af', 'Happy Leavers': '#EEB76B', 'Loyal Sufferers': '#FF4B4B'})
-                fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1.2]))); st.plotly_chart(fig, use_container_width=True)
+                    st.dataframe(df_loyal_sufferers.head(5), use_container_width=True)
+                else:
+                    st.success("✅ None found. All high-risk employees left as predicted.")
+            
+            # Only show the chart if we have anomalies
+            has_happy = stats_happy is not None
+            has_loyal = stats_loyal is not None
+            
+            if has_happy or has_loyal:
+                st.markdown("---")
+                st.subheader("📊 What Makes Them Different from the Average?")
+                st.caption("This chart shows how much each anomaly group deviates from the company average. The 0% line = normal. Bars further from 0% = more unusual.")
+                
+                # FIX 2: Calculate percentage deviation from average (solves the scale problem)
+                deviations = []
+                for col in numeric_cols_anomaly:
+                    avg_val = stats_avg[col]
+                    if avg_val == 0: continue  # Skip zero-baseline features to avoid division by zero
+                    
+                    if has_happy:
+                        happy_dev = ((stats_happy[col] - avg_val) / avg_val) * 100
+                        deviations.append({
+                            'Group': '🚪 Happy Leavers', 
+                            'Feature': col.replace('_', ' ').title(), 
+                            'Deviation %': round(happy_dev, 1),
+                            'Actual': round(stats_happy[col], 2),
+                            'Average': round(avg_val, 2)
+                        })
+                    if has_loyal:
+                        loyal_dev = ((stats_loyal[col] - avg_val) / avg_val) * 100
+                        deviations.append({
+                            'Group': '🛡️ Loyal Sufferers', 
+                            'Feature': col.replace('_', ' ').title(), 
+                            'Deviation %': round(loyal_dev, 1),
+                            'Actual': round(stats_loyal[col], 2),
+                            'Average': round(avg_val, 2)
+                        })
+                
+                dev_df = pd.DataFrame(deviations)
+                
+                # FIX 3: Use horizontal bar chart instead of radar chart
+                fig = px.bar(
+                    dev_df,
+                    x='Deviation %',
+                    y='Feature',
+                    color='Group',
+                    orientation='h',
+                    title="How Anomaly Groups Differ from Company Average",
+                    template="plotly_dark",
+                    color_discrete_map={
+                        '🚪 Happy Leavers': '#EEB76B', 
+                        '🛡️ Loyal Sufferers': '#FF4B4B'
+                    },
+                    height=max(350, len(numeric_cols_anomaly) * 55),
+                    barmode='group'
+                )
+                fig.update_layout(
+                    yaxis={'categoryorder': 'array', 'categoryarray': sorted(dev_df['Feature'].unique())},
+                    xaxis_title="% Difference from Company Average (0% = Normal)",
+                    yaxis_title="",
+                    showlegend=True,
+                    legend=dict(
+                        orientation="h", 
+                        yanchor="bottom", 
+                        y=1.05, 
+                        xanchor="center", 
+                        x=0.5
+                    ),
+                    margin=dict(l=10, r=10, t=60, b=10)
+                )
+                # Add a 0% reference line
+                fig.add_vline(x=0, line_dash="solid", line_color="white", opacity=0.25, line_width=1)
+                
+                # Add custom hover data
+                fig.update_traces(
+                    hovertemplate="<b>%{y}</b><br>Deviation: %{x:+.1f}%<extra></extra>"
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # FIX 4: Add clear, actionable key takeaways
+                st.markdown("### 💡 Key Takeaways")
+                
+                if has_happy:
+                    happy_sorted = dev_df[dev_df['Group'] == '🚪 Happy Leavers'].sort_values('Deviation %', key=abs, ascending=False)
+                    if len(happy_sorted) > 0:
+                        top_happy = happy_sorted.iloc[0]
+                        st.info(
+                            f"**Happy Leavers** stood out most in **{top_happy['Feature']}** "
+                            f"(they averaged **{top_happy['Actual']}** vs. company average of **{top_happy['Average']}**, "
+                            f"a **{top_happy['Deviation %']:+.1f}%** difference). "
+                            f"This factor didn't trigger the AI — it may indicate external factors (poaching, relocation)."
+                        )
+                
+                if has_loyal:
+                    loyal_sorted = dev_df[dev_df['Group'] == '🛡️ Loyal Sufferers'].sort_values('Deviation %', key=abs, ascending=False)
+                    if len(loyal_sorted) > 0:
+                        top_loyal = loyal_sorted.iloc[0]
+                        st.warning(
+                            f"**Loyal Sufferers** stood out most in **{top_loyal['Feature']}** "
+                            f"(they averaged **{top_loyal['Actual']}** vs. company average of **{top_loyal['Average']}**, "
+                            f"a **{top_loyal['Deviation %']:+.1f}%** difference). "
+                            f"They match the risk profile but haven't left — likely 'golden handcuffed' or lacking alternatives. Monitor closely."
+                        )
+            else:
+                st.markdown("---")
+                st.success("🎯 **No anomalies detected.** The AI model's predictions align perfectly with actual outcomes.")
 
         with tab4:
             st.subheader("📊 Retention Priority Matrix")
@@ -1248,9 +1378,6 @@ def main():
                 st.markdown("---"); st.markdown("### 📝 Hiring Checklist (Do's & Don'ts)"); st.write("Based on the data, apply these filters to your next job opening:")
                 checklist = []
                 
-                # ============================================================
-                # FIXED: Dynamic checklist that covers ALL top-3 differentiators
-                # ============================================================
                 top_3_features = top_3_diff['Metric'].tolist()
                 
                 for _, row in top_3_diff.iterrows():
@@ -1315,13 +1442,11 @@ def main():
                         else:
                             checklist.append({"Type": "✅ CONSIDER", "Rule": f"Lower '{metric_clean}' scores may correlate with top performance. Don't assume higher is always better."})
                 
-                # Fallback: if still empty, show universal best practices
                 if len(checklist) == 0:
                     checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who demonstrate stability in previous roles (2+ years per company on average)."})
                     checklist.append({"Type": "✅ DO Look For", "Rule": "Candidates who ask thoughtful questions about company culture, team dynamics, and growth opportunities."})
                     checklist.append({"Type": "🚫 AVOID", "Rule": "Candidates who focus exclusively on salary and title, with no interest in the role itself or the team."})
                 
-                # Render the checklist with appropriate styling
                 for item in checklist:
                     if "DO" in item['Type']: 
                         st.success(f"**{item['Type']}**: {item['Rule']}")
