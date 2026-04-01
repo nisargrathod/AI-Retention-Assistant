@@ -1096,7 +1096,7 @@ def main():
                             total_investment = selected_employees['cost_to_retain'].sum()
                             total_savings = selected_employees['net_savings'].sum()
                             
-                            st.balloons()
+                            
                             st.success("✅ **Optimization Complete.** Here is your action plan:")
                             
                             m1, m2, m3 = st.columns(3)
