@@ -1228,9 +1228,9 @@ def main():
 
 **Context:**
 - We analyzed {num_employees} employees at risk of AI automation.
-- Layoff + rehiring AI talent costs: ₹{total_layoff_cost/10000000:.1f} Cr.
-- Reskilling the same team costs: ₹{total_reskill_cost/10000000:.1f} Cr.
-- Reskilling saves us ₹{savings/10000000:.1f} Cr.
+- Layoff + rehiring AI talent costs: ₹{total_layoff_cost}/10000000:.1f} Cr.
+- Reskilling the same team costs: ₹{total_reskill_cost}/10000000:.1f} Cr.
+- Reskilling saves us ₹{savings}/10000000:.1f} Cr.
 - Layoffs cause hidden costs: institutional knowledge loss, 30% drop in remaining team morale, employer brand damage.
 
 **Task:**
@@ -1275,49 +1275,56 @@ Recommend reskilling. Briefly explain why layoffs are a trap for companies in ou
             critical_count = len(plot_data[plot_data['Zone'] == "🔴 Critical Zone (Save Now)"]); outplace_count = len(plot_data[plot_data['Zone'] == "🟢 Outplacement Zone (Let Go)"])
             col_z1.metric("Critical Interventions Needed", critical_count, delta="High Priority", delta_color="inverse"); col_z2.metric("Potential Efficiency Savings", outplace_count, delta="Safe to Exit", delta_color="normal"); col_z3.metric("Average Replacement Cost", f"₹{int(cost_threshold):,}")
             
-            with tab5:
-                st.subheader("🎯 The 'Ideal Candidate' Profiler")
-                st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Shift from Retention to <strong>Acquisition</strong>. <br>We analyze your 'Superstars' (Loyal + High Performers) to build a clear hiring checklist.</p>", unsafe_allow_html=True)
-                if 'time_spend_company' in df.columns and 'last_evaluation' in df.columns:
-                    superstar_mask = (df['left'] == 0) & (df['time_spend_company'] > 4) & (df['last_evaluation'] > 0.8)
-                else:
-                    st.info("Dataset missing specific tenure/evaluation columns. Defining Superstars simply as top retained performers.")
-                    superstar_mask = (df['left'] == 0)
+        with tab5:
+            st.subheader("🎯 The 'Ideal Candidate' Profiler")
+            st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Shift from Retention to <strong>Acquisition</strong>. <br>We analyze your 'Superstars' (Loyal + High Performers) to build a clear hiring checklist.</p>", unsafe_allow_html=True)
+            if 'time_spend_company' in df.columns and 'last_evaluation' in df.columns:
+                superstar_mask = (df['left'] == 0) & (df['time_spend_company'] > 4) & (df['last_evaluation'] > 0.8)
+            else:
+                st.info("Dataset missing specific tenure/evaluation columns. Defining Superstars simply as top retained performers.")
+                superstar_mask = (df['left'] == 0)
+            
+            df_superstars = df[superstar_mask]; df_average = df[(df['left'] == 0) & (~superstar_mask)]
+            if len(df_superstars) < 5: st.warning("Not enough 'Superstar' data in this dataset to generate a reliable profile.")
+            else:
+                st.success(f"Analyzed {len(df_superstars)} Superstars vs {len(df_average)} Average Employees.")
+                metrics_to_compare = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
+                super_mean = df_superstars[metrics_to_compare].mean(); avg_mean = df_average[metrics_to_compare].mean()
+                comparison_long = pd.DataFrame({'Metric': metrics_to_compare, 'Superstar': super_mean.values, 'Average Employee': avg_mean.values}).melt(id_vars='Metric', var_name='Group', value_name='Average Value')
+                fig_compare = px.bar(comparison_long, x='Metric', y='Average Value', color='Group', barmode='group', title="Superstars vs. Average Employees (Head-to-Head)", template="plotly_dark", color_discrete_map={'Superstar': '#17B794', 'Average Employee': '#9ca3af'}, text_auto=True, height=500)
+                fig_compare.update_xaxes(title="", tickangle=45); fig_compare.update_layout(yaxis_title="Average Score / Value"); st.plotly_chart(fig_compare, use_container_width=True)
+                st.markdown("### 🧬 The DNA of a Top Performer"); st.write("Here are the 3 biggest differentiators between your best employees and the rest.")
+                diff_df = pd.DataFrame({'Metric': metrics_to_compare, 'Difference': (super_mean - avg_mean).values})
+                diff_df['Abs_Diff'] = diff_df['Difference'].abs(); top_3_diff = diff_df.nlargest(3, 'Abs_Diff')
                 
-                df_superstars = df[superstar_mask]; df_average = df[(df['left'] == 0) & (~superstar_mask)]
-                if len(df_superstars) < 5: st.warning("Not enough 'Superstar' data in this dataset to generate a reliable profile.")
-                else:
-                    st.success(f"Analyzed {len(df_superstars)} Superstars vs {len(df_average)} Average Employees.")
-                    metrics_to_compare = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
-                    super_mean = df_superstars[metrics_to_compare].mean(); avg_mean = df_average[metrics_to_compare].mean()
-                    comparison_long = pd.DataFrame({'Metric': metrics_to_compare, 'Superstar': super_mean.values, 'Average Employee': avg_mean.values}).melt(id_vars='Metric', var_name='Group', value_name='Average Value')
-                    fig_compare = px.bar(comparison_long, x='Metric', y='Average Value', color='Group', barmode='group', title="Superstars vs. Average Employees (Head-to-Head)", template="plotly_dark", color_discrete_map={'Superstar': '#17B794', 'Average Employee': '#9ca3af'}, text_auto=True, height=500)
-                    fig_compare.update_xaxes(title="", tickangle=45); fig_compare.update_layout(yaxis_title="Average Score / Value"); st.plotly_chart(fig_compare, use_container_width=True)
-                    st.markdown("### 🧬 The DNA of a Top Performer"); st.write("Here are the 3 biggest differentiators between your best employees and the rest.")
-                    diff_df = pd.DataFrame({'Metric': metrics_to_compare, 'Difference': (super_mean - avg_mean).values})
-                    diff_df['Abs_Diff'] = diff_df['Difference'].abs(); top_3_diff = diff_df.nlargest(3, 'Abs_Diff')
-                    col_dna1, col_dna2, col_dna3 = st.columns(3)
-                    def get_dna_insight(metric, diff_val):
-                        metric_name = metric.replace('_', ' ').title()
-                        if 'satisfaction' in metric.lower():
-                            if diff_val > 0: return "🟢 High Culture Fit", f"Superstars are {diff_val:.2f} points happier on average."
-                            else: return "🔴 Low Satisfaction", f"Unexpected: Superstars seem less satisfied."
-                        elif 'hours' in metric.lower():
-                            if diff_val < 0: return "🟢 Work-Life Balance", f"Superstars work {abs(diff_val):.0f} hrs LESS."
-                            else: return "🔴 High Workload", f"Superstars work harder."
-                        elif 'evaluation' in metric.lower():
-                            if diff_val > 0: return "🟢 High Performance", f"Superstars score {diff_val:.2f} points higher."
-                            else: return "🔴 Low Performance", f"Superstars score lower."
-                        else: return "📊 " + metric_name, f"Difference of {diff_val:.2f}."
-                    cols = [col_dna1, col_dna2, col_dna3 = st.columns(3)
-                    for i, col in enumerate(cols):
-                        if i < len(top_3_diff):
-                            row = top_3_diff.iloc[i]; title, text = get_dna_insight(row['Metric'], row['Difference'])
+                # FIX 1: Properly create columns and list
+                col_dna1, col_dna2, col_dna3 = st.columns(3)
+                cols = [col_dna1, col_dna2, col_dna3]
+                
+                def get_dna_insight(metric, diff_val):
+                    metric_name = metric.replace('_', ' ').title()
+                    if 'satisfaction' in metric.lower():
+                        if diff_val > 0: return "🟢 High Culture Fit", f"Superstars are {diff_val:.2f} points happier on average."
+                        else: return "🔴 Low Satisfaction", f"Unexpected: Superstars seem less satisfied."
+                    elif 'hours' in metric.lower():
+                        if diff_val < 0: return "🟢 Work-Life Balance", f"Superstars work {abs(diff_val):.0f} hrs LESS."
+                        else: return "🔴 High Workload", f"Superstars work harder."
+                    elif 'evaluation' in metric.lower():
+                        if diff_val > 0: return "🟢 High Performance", f"Superstars score {diff_val:.2f} points higher."
+                        else: return "🔴 Low Performance", f"Superstars score lower."
+                    else: return "📊 " + metric_name, f"Difference of {diff_val:.2f}."
+                
+                # FIX 2: Properly iterate with 'with col:'
+                for i, col in enumerate(cols):
+                    if i < len(top_3_diff):
+                        row = top_3_diff.iloc[i]
+                        title, text = get_dna_insight(row['Metric'], row['Difference'])
+                        with col:
                             st.markdown(f"<div class='custom-card' style='text-align: center; border-top: 4px solid #17B794;'><h3 style='margin-top: 0;'>{title}</h3><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{text}</p></div>", unsafe_allow_html=True)
-                st.markdown("---"); st.markdown("### 📝 Hiring Checklist (Do's & Don'ts & Don'ts)"); st.write("Based on the data, apply these filters to your next job opening:")
-                checklist = []
                 
-                top_3_features = top_3_diff['Metric'].tolist()
+                st.markdown("---"); st.markdown("### 📝 Hiring Checklist (Do's & Don'ts)")
+                st.write("Based on the data, apply these filters to your next job opening:")
+                checklist = []
                 
                 for _, row in top_3_diff.iterrows():
                     feature = row['Metric']
@@ -1453,17 +1460,29 @@ Recommend reskilling. Briefly explain why layoffs are a trap for companies in ou
         if st.button("📈 Show Me the 12-Month Projection", type="primary"):
             months = list(range(1, 13)); current_workforce = len(df)
             
-            raw_risk_scores = pipeline.predict_proba(df.drop('left', axis=1)[:, 1]
+            # FIX 3: Proper closing bracket on predict_proba
+            raw_risk_scores = pipeline.predict_proba(df.drop('left', axis=1))[:, 1]
             total_risk_score = calibrate_probability_array(raw_risk_scores, temperature=0.55).sum()
             
             monthly_leavers_no_action = total_risk_score / 12.0
             monthly_leavers_with_action = monthly_leavers_no_action * (1 - (intervention_efficacy / 100.0))
             forecast_bau = []; forecast_intervention = []; temp_bau = float(current_workforce); temp_int = float(current_workforce)
+            
+            # FIX 4: Complete forecast loop logic
             for m in months:
-                natural_leavers_bau = temp_bau * (natural_attrition_rate / 100.0); natural_leavers_int = temp_int * (natural_attrition_rate / 100.0)
-                total_leavers_bau = monthly_leavers_no_action + natural_leavers_bau; total_leavers_intervention.append(temp_bau); forecast_intervention.append(temp_int)
+                natural_leavers_bau = temp_bau * (natural_attrition_rate / 100.0)
+                natural_leavers_int = temp_int * (natural_attrition_rate / 100.0)
+                total_leavers_bau = monthly_leavers_no_action + natural_leavers_bau
+                total_leavers_int = monthly_leavers_with_action + natural_leavers_int
+                temp_bau = temp_bau - total_leavers_bau
+                temp_int = temp_int - total_leavers_int
+                forecast_bau.append(temp_bau)
+                forecast_intervention.append(temp_int)
+            
             forecast_df = pd.DataFrame({'Month': months, 'If We Do Nothing (Status Quo)': forecast_bau, 'If We Follow the Plan': forecast_intervention}).melt(id_vars='Month', var_name='Scenario', value_name='Workforce Count')
-            fig_forecast = px.line(forecast_df, x='Month', y='Workforce Count', color='Scenario', title="Projected Workforce Size Over the Next 12 Months", template="plotly_dark", markers=True, color_discrete_map={'If We Do Nothing (Status Quo)': "#EEB76B", 'If We Follow the Plan': "#17B794"}, color_discrete_map={'If We Do Nothing (Status Quo)': "#EEB76B", 'If We Follow the Plan': "#17B794"})
+            
+            # FIX 5: Remove duplicate color_discrete_map
+            fig_forecast = px.line(forecast_df, x='Month', y='Workforce Count', color='Scenario', title="Projected Workforce Size Over the Next 12 Months", template="plotly_dark", markers=True, color_discrete_map={'If We Do Nothing (Status Quo)': "#EEB76B", 'If We Follow the Plan': "#17B794"})
             fig_forecast.update_layout(yaxis_title="Total Employee Headcount", xaxis=dict(dtick=1)); st.plotly_chart(fig_forecast, use_container_width=True)
             saved_employees = forecast_intervention[-1] - forecast_bau[-1]
             
@@ -1478,5 +1497,4 @@ Recommend reskilling. Briefly explain why layoffs are a trap for companies in ou
             st.success(f"**The Bottom Line:** If we execute our 6-month plan and successfully retain just **{intervention_efficacy}%** of our at-risk staff, we will finish the year with **{int(forecast_intervention[-1])} employees** instead of **{int(forecast_bau[-1])}**. This prevents approximately **₹{total_money_saved:,.0f}** in recruitment, onboarding, and lost productivity costs.")
 
 if __name__ == "__main__":
-    main()
     main()
