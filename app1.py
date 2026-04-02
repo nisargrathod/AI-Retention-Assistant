@@ -2,7 +2,9 @@
 # All Necessary Imports
 # ====================================================================
 import os
+import sys
 import json
+import base64
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
@@ -12,7 +14,7 @@ import shap
 import matplotlib.pyplot as plt
 import lightgbm as lgb
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
@@ -23,7 +25,7 @@ from time import sleep
 from datetime import datetime, timedelta
 from scipy.sparse import issparse
 from scipy.special import expit, logit
-import base64
+from io import BytesIO
 
 # --- Imports for Evaluation 1 (Logic Engine) ---
 import dowhy
@@ -42,7 +44,7 @@ import dice_ml
 from dice_ml import Dice
 
 # ====================================================================
-# 1. ADVANCED UI STYLING (CSS) - ENHANCED
+# 1. ADVANCED UI STYLING (CSS)
 # ====================================================================
 st.markdown("""
 <style>
@@ -256,139 +258,122 @@ st.markdown("""
         background: linear-gradient(135deg, #0d2818 0%, #1c2128 100%);
     }
     
-    /* NEW: Data Freshness Badge */
-    .freshness-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 12px;
+    /* NEW: Onboarding Styles */
+    .onboarding-container {
+        background: linear-gradient(135deg, #0d2818 0%, #161b22 50%, #1c2128 100%);
+        border: 2px solid #17B794;
         border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 500;
-    }
-    .freshness-fresh {
-        background-color: #0d281880;
-        color: #17B794;
-        border: 1px solid #17B79440;
-    }
-    .freshness-stale {
-        background-color: #2d251580;
-        color: #EEB76B;
-        border: 1px solid #EEB76B40;
+        padding: 40px;
+        margin: 20px 0;
+        text-align: center;
     }
     
-    /* NEW: Confidence Bar */
-    .confidence-bar {
-        height: 6px;
-        border-radius: 3px;
-        background-color: #30363d;
-        overflow: hidden;
-        margin-top: 8px;
+    .onboarding-step {
+        background-color: #1c2128;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 25px;
+        margin: 15px 0;
+        transition: all 0.3s ease;
     }
-    .confidence-fill {
-        height: 100%;
-        border-radius: 3px;
-        transition: width 0.5s ease;
+    .onboarding-step:hover {
+        border-color: #17B794;
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(23, 183, 148, 0.2);
     }
     
-    /* NEW: Status Pill */
-    .status-pill {
+    .step-number {
+        background: linear-gradient(135deg, #17B794, #11998e);
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        padding: 2px 10px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-    .status-high {
-        background-color: #FF4B4B20;
-        color: #FF4B4B;
-    }
-    .status-medium {
-        background-color: #EEB76B20;
-        color: #EEB76B;
-    }
-    .status-low {
-        background-color: #17B79420;
-        color: #17B794;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.2rem;
+        margin-bottom: 15px;
     }
     
-    /* NEW: Benchmark Card */
-    .benchmark-card {
-        background: linear-gradient(135deg, #1c2128 0%, #21262d 100%);
+    /* NEW: Search Styles */
+    .search-result-item {
+        background-color: #1c2128;
+        border: 1px solid #30363d;
+        border-radius: 10px;
+        padding: 15px 20px;
+        margin: 10px 0;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .search-result-item:hover {
+        border-color: #17B794;
+        background-color: #21262d;
+    }
+    
+    /* NEW: Notification Badge */
+    .notification-badge {
+        background-color: #FF4B4B;
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        font-weight: 700;
+        margin-left: 5px;
+    }
+    
+    /* NEW: Glossary Styles */
+    .glossary-item {
+        background-color: #161b22;
+        border-left: 3px solid #17B794;
+        padding: 15px 20px;
+        margin: 10px 0;
+        border-radius: 0 8px 8px 0;
+    }
+    .glossary-term {
+        color: #17B794;
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin-bottom: 5px;
+    }
+    .glossary-definition {
+        color: #c9d1d9;
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+    
+    /* NEW: Succession Card */
+    .succession-card {
+        background-color: #1c2128;
         border: 1px solid #30363d;
         border-radius: 12px;
         padding: 20px;
+        margin: 10px 0;
+    }
+    .readiness-bar {
+        height: 8px;
+        border-radius: 4px;
+        background-color: #30363d;
+        overflow: hidden;
+        margin-top: 10px;
+    }
+    .readiness-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.5s ease;
+    }
+    
+    /* NEW: D&I Metric Card */
+    .di-card {
+        background: linear-gradient(135deg, #1c2128 0%, #21262d 100%);
+        border: 1px solid #30363d;
+        border-radius: 16px;
+        padding: 25px;
         text-align: center;
-    }
-    .benchmark-value {
-        font-size: 2.5rem;
-        font-weight: 800;
-    }
-    .benchmark-label {
-        color: #8b949e;
-        font-size: 0.85rem;
-        margin-top: 5px;
-    }
-    .benchmark-comparison {
-        margin-top: 15px;
-        padding-top: 15px;
-        border-top: 1px solid #30363d;
-        font-size: 0.9rem;
-    }
-    
-    /* NEW: Action Tracker */
-    .action-tracker-item {
-        background-color: #161b22;
-        border: 1px solid #30363d;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 10px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .action-tracker-item.completed {
-        border-left: 4px solid #17B794;
-        opacity: 0.7;
-    }
-    .action-tracker-item.pending {
-        border-left: 4px solid #EEB76B;
-    }
-    .action-tracker-item.overdue {
-        border-left: 4px solid #FF4B4B;
-    }
-    
-    /* NEW: Privacy Badge */
-    .privacy-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 12px;
-        border-radius: 8px;
-        font-size: 0.75rem;
-        background-color: #21262d;
-        color: #8b949e;
-        border: 1px solid #30363d;
-    }
-    
-    /* NEW: Stay Interview Template */
-    .interview-question {
-        background-color: #161b22;
-        border-left: 3px solid #17B794;
-        padding: 12px 15px;
-        margin-bottom: 8px;
-        border-radius: 0 8px 8px 0;
-    }
-    .interview-question .question-text {
-        color: #e6edf3;
-        font-weight: 500;
-    }
-    .interview-question .question-purpose {
-        color: #8b949e;
-        font-size: 0.8rem;
-        margin-top: 4px;
     }
     
     @media (max-width: 768px) {
@@ -409,6 +394,9 @@ st.markdown("""
         .card-percentage {
             font-size: 1.5rem;
         }
+        .onboarding-container {
+            padding: 20px;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -427,77 +415,114 @@ def calibrate_probability_array(probs, temperature=0.55):
     return expit(scaled_logit)
 
 # ====================================================================
-# NEW: Data Quality Report Function
+# NEW: UTILITY FUNCTIONS
 # ====================================================================
-def generate_data_quality_report(df, target_col='left'):
-    """Generate comprehensive data quality metrics"""
-    report = {
-        'total_records': len(df),
-        'total_columns': len(df.columns),
-        'missing_values': df.isnull().sum().sum(),
-        'missing_percentage': (df.isnull().sum().sum() / (len(df) * len(df.columns))) * 100,
-        'duplicate_rows': df.duplicated().sum(),
-        'duplicate_percentage': (df.duplicated().sum() / len(df)) * 100,
-        'numeric_columns': len(df.select_dtypes(include=np.number).columns),
-        'categorical_columns': len(df.select_dtypes(include=['object', 'category']).columns),
-        'memory_usage_mb': df.memory_usage(deep=True).sum() / (1024 * 1024),
-        'class_distribution': None,
-        'issues': []
+
+def initialize_session_state():
+    """Initialize all session state variables"""
+    defaults = {
+        'is_global': False,
+        'nav_to': None,
+        'first_visit': True,
+        'alert_history': [],
+        'search_results': None,
+        'app_settings': {
+            'currency': '₹',
+            'currency_name': 'INR',
+            'salary_low': 400000,
+            'salary_medium': 600000,
+            'salary_high': 900000,
+            'attrition_threshold': 20,
+            'satisfaction_threshold': 0.5,
+            'hours_threshold': 200,
+        },
+        'prediction_history': [],
+        'onboarding_complete': False,
     }
-    
-    # Check class imbalance
-    if target_col in df.columns:
-        class_counts = df[target_col].value_counts()
-        report['class_distribution'] = class_counts.to_dict()
-        imbalance_ratio = class_counts.max() / class_counts.min() if class_counts.min() > 0 else float('inf')
-        if imbalance_ratio > 3:
-            report['issues'].append(f"⚠️ Severe class imbalance (ratio: {imbalance_ratio:.1f}:1)")
-        elif imbalance_ratio > 2:
-            report['issues'].append(f"⚠️ Moderate class imbalance (ratio: {imbalance_ratio:.1f}:1)")
-    
-    # Check for missing values
-    if report['missing_percentage'] > 5:
-        report['issues'].append(f"⚠️ High missing values ({report['missing_percentage']:.1f}%)")
-    
-    # Check for duplicates
-    if report['duplicate_percentage'] > 5:
-        report['issues'].append(f"⚠️ High duplicate rows ({report['duplicate_percentage']:.1f}%)")
-    
-    # Check for constant columns
-    for col in df.columns:
-        if df[col].nunique() == 1:
-            report['issues'].append(f"⚠️ Constant column detected: {col}")
-    
-    return report
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
-# ====================================================================
-# NEW: Industry Benchmarks Data
-# ====================================================================
-INDUSTRY_BENCHMARKS = {
-    'Technology': {'avg_attrition': 13.2, 'cost_per_hire_pct': 0.15, 'time_to_fill_days': 42},
-    'Healthcare': {'avg_attrition': 18.5, 'cost_per_hire_pct': 0.12, 'time_to_fill_days': 65},
-    'Financial Services': {'avg_attrition': 11.8, 'cost_per_hire_pct': 0.20, 'time_to_fill_days': 38},
-    'Retail': {'avg_attrition': 25.4, 'cost_per_hire_pct': 0.08, 'time_to_fill_days': 21},
-    'Manufacturing': {'avg_attrition': 15.7, 'cost_per_hire_pct': 0.10, 'time_to_fill_days': 35},
-    'Consulting': {'avg_attrition': 16.9, 'cost_per_hire_pct': 0.18, 'time_to_fill_days': 45},
-    'Overall Average': {'avg_attrition': 17.5, 'cost_per_hire_pct': 0.14, 'time_to_fill_days': 42}
-}
+def add_to_alert_history(level, message, timestamp=None):
+    """Add alert to history"""
+    if timestamp is None:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    alert = {'level': level, 'message': message, 'timestamp': timestamp}
+    st.session_state.alert_history.append(alert)
+    # Keep only last 50 alerts
+    if len(st.session_state.alert_history) > 50:
+        st.session_state.alert_history = st.session_state.alert_history[-50:]
 
-# ====================================================================
-# NEW: Stay Interview Templates
-# ====================================================================
-STAY_INTERVIEW_QUESTIONS = [
-    {"question": "What do you look forward to when you come to work each day?", "purpose": "Identifies motivators and engagement drivers"},
-    {"question": "What are you learning here, and what do you want to learn?", "purpose": "Assesses growth opportunities and development needs"},
-    {"question": "Why do you stay at this company?", "purpose": "Reveals retention factors to reinforce"},
-    {"question": "When was the last time you thought about leaving, and what prompted it?", "purpose": "Identifies recent friction points or triggers"},
-    {"question": "What can I do to make your experience here better?", "purpose": "Direct actionable feedback from the employee"},
-    {"question": "Do you feel recognized for your contributions? How would you prefer to be recognized?", "purpose": "Checks if recognition needs are being met"},
-    {"question": "What would make you want to stay for another 2-3 years?", "purpose": "Long-term retention planning"},
-    {"question": "Is there anything preventing you from doing your best work?", "purpose": "Identifies blockers and frustrations"},
-    {"question": "How would you describe our company culture to a friend?", "purpose": "Gauges cultural alignment and perception"},
-    {"question": "What feedback do you have for me as your manager?", "purpose": "Builds trust and opens communication channels"}
-]
+def get_currency_symbol():
+    """Get currency symbol from settings"""
+    return st.session_state.get('app_settings', {}).get('currency', '₹')
+
+def format_currency(amount):
+    """Format amount with currency"""
+    symbol = get_currency_symbol()
+    if amount >= 10000000:
+        return f"{symbol}{amount/10000000:.2f} Cr"
+    elif amount >= 100000:
+        return f"{symbol}{amount/100000:.2f} L"
+    else:
+        return f"{symbol}{amount:,.0f}"
+
+def calculate_confidence_interval(prob, n_samples=100, method='bootstrap'):
+    """Calculate confidence interval for prediction"""
+    # Simplified CI calculation based on binomial proportion
+    z = 1.96  # 95% CI
+    margin = z * np.sqrt((prob * (1 - prob)) / max(n_samples, 1))
+    lower = max(0, prob - margin)
+    upper = min(1, prob + margin)
+    return lower, upper
+
+def get_groq_llm():
+    """Get Groq LLM with error handling"""
+    try:
+        api_key = st.secrets.get("GROQ_API_KEY", None)
+        if not api_key:
+            return None, "API_KEY_MISSING"
+        llm = ChatGroq(
+            groq_api_key=api_key,
+            model_name="llama-3.3-70b-versatile",
+            temperature=0.7,
+            timeout=30
+        )
+        return llm, None
+    except Exception as e:
+        return None, str(e)
+
+def dataframe_to_csv_download(df, filename="data.csv"):
+    """Convert dataframe to CSV for download"""
+    csv = df.to_csv(index=False).encode('utf-8')
+    return csv
+
+def get_feature_description(feature_name):
+    """Get human-readable description for features"""
+    descriptions = {
+        'satisfaction_level': 'How satisfied the employee is with their job (0-1 scale)',
+        'last_evaluation': 'Performance rating from last review (0-1 scale)',
+        'number_project': 'Number of projects the employee is currently working on',
+        'average_montly_hours': 'Average hours worked per month',
+        'time_spend_company': 'Years the employee has been with the company',
+        'Work_accident': 'Whether the employee had a workplace accident (0=No, 1=Yes)',
+        'promotion_last_5years': 'Whether the employee was promoted in last 5 years (0=No, 1=Yes)',
+        'Department': 'The department the employee works in',
+        'salary': 'Salary level (low/medium/high)',
+        'left': 'Whether the employee left the company (0=Stayed, 1=Left)',
+    }
+    return descriptions.get(feature_name, f'The {feature_name} metric')
+
+def get_risk_label(probability):
+    """Get human-readable risk label"""
+    if probability >= 0.75:
+        return "Critical", "#FF4B4B"
+    elif probability >= 0.5:
+        return "High", "#EEB76B"
+    elif probability >= 0.3:
+        return "Medium", "#FFA500"
+    else:
+        return "Low", "#17B794"
 
 # ====================================================================
 # Visualization Functions
@@ -607,24 +632,40 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
             tabs[i].plotly_chart(figs[i], use_container_width=True)
 
 # ====================================================================
-# NEW: Seasonal Trend Analysis
+# NEW: EMPLOYEE SEARCH FUNCTION
 # ====================================================================
-def analyze_seasonal_trends(df):
-    """Analyze if there are seasonal patterns in attrition"""
-    if 'time_spend_company' not in df.columns:
-        return None
+def search_employees(df, search_query, search_by="all"):
+    """Search employees by various criteria"""
+    if not search_query:
+        return df.head(20)
     
-    # Create tenure buckets to simulate temporal patterns
-    df_analysis = df.copy()
+    search_query = search_query.lower()
+    results = pd.DataFrame()
     
-    # Analyze attrition by tenure (as proxy for time-based patterns)
-    tenure_attrition = df_analysis.groupby('time_spend_company').agg({
-        'left': ['count', 'sum', 'mean']
-    }).reset_index()
-    tenure_attrition.columns = ['Tenure_Years', 'Total_Employees', 'Left', 'Attrition_Rate']
-    tenure_attrition['Attrition_Rate'] = tenure_attrition['Attrition_Rate'] * 100
+    if search_by == "all" or search_by == "department":
+        if 'Department' in df.columns:
+            mask = df['Department'].str.lower().str.contains(search_query, na=False)
+            results = pd.concat([results, df[mask]])
     
-    return tenure_attrition
+    if search_by == "all" or search_by == "salary":
+        if 'salary' in df.columns:
+            mask = df['salary'].str.lower().str.contains(search_query, na=False)
+            results = pd.concat([results, df[mask]])
+    
+    # Numeric search
+    try:
+        num_query = float(search_query)
+        numeric_cols = df.select_dtypes(include=np.number).columns
+        for col in numeric_cols:
+            if col != 'left':
+                mask = df[col] == num_query
+                results = pd.concat([results, df[mask]])
+    except:
+        pass
+    
+    # Remove duplicates
+    results = results.drop_duplicates()
+    return results if len(results) > 0 else df.head(0)
 
 # ====================================================================
 # Logic Engine Functions
@@ -652,15 +693,29 @@ def analyze_why_people_leave(df):
         st.markdown("<br>", unsafe_allow_html=True)
 
         effects = {}
-        model_sal = CausalModel(data=df_model, treatment='salary_num', outcome='left', graph=causal_graph.replace('\n', ' '))
-        est_sal = model_sal.estimate_effect(model_sal.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
-        effects['Salary'] = abs(est_sal.value)
-        model_sat = CausalModel(data=df_model, treatment='satisfaction_level', outcome='left', graph=causal_graph.replace('\n', ' '))
-        est_sat = model_sat.estimate_effect(model_sat.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
-        effects['Satisfaction'] = abs(est_sat.value)
-        model_hr = CausalModel(data=df_model, treatment='average_montly_hours', outcome='left', graph=causal_graph.replace('\n', ' '))
-        est_hr = model_hr.estimate_effect(model_hr.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
-        effects['Overwork'] = abs(est_hr.value) * 10
+        try:
+            model_sal = CausalModel(data=df_model, treatment='salary_num', outcome='left', graph=causal_graph.replace('\n', ' '))
+            est_sal = model_sal.estimate_effect(model_sal.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
+            effects['Salary'] = abs(est_sal.value)
+        except Exception as e:
+            st.warning(f"Salary causal analysis skipped: {str(e)[:50]}...")
+            effects['Salary'] = 0.1
+        
+        try:
+            model_sat = CausalModel(data=df_model, treatment='satisfaction_level', outcome='left', graph=causal_graph.replace('\n', ' '))
+            est_sat = model_sat.estimate_effect(model_sat.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
+            effects['Satisfaction'] = abs(est_sat.value)
+        except Exception as e:
+            st.warning(f"Satisfaction causal analysis skipped: {str(e)[:50]}...")
+            effects['Satisfaction'] = 0.1
+            
+        try:
+            model_hr = CausalModel(data=df_model, treatment='average_montly_hours', outcome='left', graph=causal_graph.replace('\n', ' '))
+            est_hr = model_hr.estimate_effect(model_hr.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
+            effects['Overwork'] = abs(est_hr.value) * 10
+        except Exception as e:
+            st.warning(f"Overwork causal analysis skipped: {str(e)[:50]}...")
+            effects['Overwork'] = 0.1
 
         sorted_effects = sorted(effects.items(), key=lambda item: item[1], reverse=True)
         def get_display_info(rank, factor, value):
@@ -670,7 +725,7 @@ def analyze_why_people_leave(df):
             return color, status, advice
 
         c1, c2, c3 = st.columns(3)
-        for idx, (col, factor_value) in enumerate(sorted_effects):
+        for idx, (col, factor_value) in enumerate(sorted_effects[:3]):
             color, status, advice = get_display_info(idx + 1, col, factor_value)
             card_html = f"<div style='background-color: {color}20; border: 1px solid {color}; border-radius: 12px; padding: 20px; text-align: center; height: 100%;'><h2 style='color: {color}; margin: 0; font-size: 2rem;'>#{idx+1} {col}</h2><h4 style='color: white; margin: 10px 0; font-weight: 600;'>{status}</h4><p style='color: #ccc; font-size: 0.9rem;'>{advice}</p></div>"
             with [c1, c2, c3][idx]: st.markdown(card_html, unsafe_allow_html=True)
@@ -705,26 +760,31 @@ def run_groq_consultant(employee_name, department, situation, solution, budget):
         root_cause = "Compensation & Salary Competitiveness"
     elif "morale" in situation.lower():
         root_cause = "Low Job Satisfaction & Morale"
+    elif "growth" in situation.lower():
+        root_cause = "Lack of Career Development"
     else:
         root_cause = "Attrition Risk Factors"
         
     action_description = solution
     cost_str = budget
 
-    try:
-        api_key = st.secrets.get("GROQ_API_KEY", None)
-        if not api_key:
-            st.warning("🔑 System Error: API Key missing.")
-            return
-
-        llm = ChatGroq(
-            groq_api_key=api_key,
-            model_name="llama-3.3-70b-versatile",
-            temperature=0.7,
-            timeout=30
-        )
-    except Exception as e:
-        st.error(f"Connection Error: {e}")
+    llm, error = get_groq_llm()
+    if error:
+        if error == "API_KEY_MISSING":
+            st.warning("🔑 **API Key Not Configured**. To use AI features:\n\n1. Go to your Streamlit Cloud secrets\n2. Add `GROQ_API_KEY`\n3. Get a free key from [groq.com](https://console.groq.com)")
+            st.markdown("""
+            <div class="custom-card" style="border-left: 4px solid #8b949e;">
+                <h4 style="color: #8b949e; margin-top: 0;">📋 Sample Template (Without AI)</h4>
+                <p style="color: #c9d1d9;">Subject: Checking In - Your Wellbeing Matters<br><br>
+                Dear {name},<br><br>
+                I hope this message finds you well. I wanted to reach out personally to check in on how you're doing. Your contributions to {department} have been valuable, and we want to ensure you have the support you need.<br><br>
+                I understand that {situation} can be challenging. We'd like to discuss {solution} to help address this.<br><br>
+                Could we schedule a brief 15-minute chat this week?<br><br>
+                Best regards,<br>HR Team</p>
+            </div>
+            """.format(name=employee_name, department=department, situation=situation.lower(), solution=solution.lower()), unsafe_allow_html=True)
+        else:
+            st.error(f"Connection Error: {error}")
         return
 
     template = """
@@ -739,8 +799,10 @@ def run_groq_consultant(employee_name, department, situation, solution, budget):
     **Task:**
     Write a polite, professional, and empathetic email draft from the HR Manager to the employee.
     Acknowledge their value. Gently address the situation. Propose the solution clearly.
+    Include a clear call-to-action (schedule a meeting, etc.).
     
-    **Tone:** Professional, Supportive.
+    **Tone:** Professional, Supportive, Human.
+    **Length:** 150-200 words max.
     """
     
     prompt = PromptTemplate.from_template(template)
@@ -760,92 +822,15 @@ def run_groq_consultant(employee_name, department, situation, solution, budget):
             st.markdown("#### 📧 Generated Email Draft")
             st.markdown(f"<div class='llm-response'>{response}</div>", unsafe_allow_html=True)
             
+            # Add copy button
+            st.code(response, language=None)
+            
         except Exception as e:
             if "rate_limit" in str(e).lower() or "429" in str(e):
                 st.warning("⏳ **AI is busy right now.** The servers are overloaded. Please wait 30 seconds and try again.")
             else:
                 st.error(f"Error generating draft: {e}")
 
-# ====================================================================
-# NEW: Executive Summary Generator
-# ====================================================================
-def generate_executive_summary(df, pipeline, attrition_rate):
-    """Generate a 1-page executive summary for CEO/Board"""
-    total_employees = len(df)
-    total_left = int(df['left'].sum())
-    
-    # Calculate high-risk count
-    feature_cols = [c for c in df.columns if c != 'left']
-    current_df = df[df['left'] == 0].copy()
-    if len(current_df) > 0:
-        risks = pipeline.predict_proba(current_df[feature_cols])[:, 1]
-        current_df['Risk_Score'] = calibrate_probability_array(risks)
-        high_risk_count = len(current_df[current_df['Risk_Score'] > 0.6])
-    else:
-        high_risk_count = 0
-    
-    summary = f"""
-## 📊 EXECUTIVE SUMMARY: Workforce Attrition Report
-**Generated:** {datetime.now().strftime('%B %d, %Y at %H:%M')} | **Data Source:** {'Custom Upload' if st.session_state.get('is_global') else 'Default Dataset'}
-
----
-
-### 🎯 Key Metrics at a Glance
-| Metric | Value | Status |
-|--------|-------|--------|
-| Total Workforce | {total_employees:,} | - |
-| Employees Left | {total_left:,} | - |
-| Current Attrition Rate | {attrition_rate:.1f}% | {'🚨 CRITICAL' if attrition_rate > 20 else '⚠️ HIGH' if attrition_rate > 15 else '✅ NORMAL'} |
-| High-Risk Employees (Current) | {high_risk_count:,} | {'🔴 ACTION NEEDED' if high_risk_count > 100 else '🟡 MONITOR' if high_risk_count > 50 else '🟢 STABLE'} |
-
----
-
-### 💡 Top 3 Recommendations
-1. **Immediate:** Schedule stay interviews for top {min(high_risk_count, 20)} high-risk employees
-2. **Short-term:** Review workload distribution for departments with >20% attrition
-3. **Long-term:** Implement quarterly pulse surveys for early warning detection
-
----
-
-### 💰 Financial Impact (Estimated)
-- **Cost of Replacing All At-Risk:** ₹{(high_risk_count * 300000):,.0f} (using avg. 50% salary replacement cost)
-- **Recommended Retention Budget:** ₹{(high_risk_count * 30000):,.0f} (10% intervention cost)
-- **Potential ROI:** 10x return on retention investment
-
----
-
-*Report generated by RetainAI Enterprise Workforce Intelligence Platform*
-*For detailed analysis, refer to individual module reports.*
-"""
-    return summary
-
-# ====================================================================
-# NEW: Employee Search Function
-# ====================================================================
-def employee_search(df, pipeline, search_term, feature_columns):
-    """Search for employees and return their risk scores"""
-    results = []
-    search_term = search_term.lower()
-    
-    for idx, row in df.iterrows():
-        match = False
-        # Search in all string columns
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                if search_term in str(row[col]).lower():
-                    match = True
-                    break
-        
-        if match:
-            employee_data = row[feature_columns].to_frame().T
-            risk_score = calibrate_probability(pipeline.predict_proba(employee_data)[0][1])
-            results.append({
-                'index': idx,
-                'data': row,
-                'risk_score': risk_score
-            })
-    
-    return results
 
 # ====================================================================
 # Main App Function
@@ -853,26 +838,17 @@ def employee_search(df, pipeline, search_term, feature_columns):
 def main():
     st.set_page_config(page_title="RetainAI | Enterprise Workforce Intelligence", page_icon="🧠", layout="wide")
     warnings.simplefilter(action='ignore', category=FutureWarning)
-
-    # ====================================================================
-    # NEW: Initialize Session State Variables
-    # ====================================================================
-    if 'action_items' not in st.session_state:
-        st.session_state.action_items = []
-    if 'data_loaded_time' not in st.session_state:
-        st.session_state.data_loaded_time = datetime.now()
-    if 'model_accuracy' not in st.session_state:
-        st.session_state.model_accuracy = None
-    if 'industry_selected' not in st.session_state:
-        st.session_state.industry_selected = 'Technology'
-
-    # ====================================================================
-    # CROSS-PAGE NAVIGATION HANDLER (FIXED FLOW)
-    # ====================================================================
-    menu_options = ['⚙️ Global Setup', 'Home', 'Employee Search', 'Employee Insights', 'Predict Attrition', 'Why They Leave', 'Industry Benchmarks', 'Budget Planner', 'Stay Interviews', 'Action Tracker', 'AI Assistant', 'AI Research Lab', 'Strategic Roadmap', 'Export Report']
     
-    default_idx = 1  # Default to 'Home' instead of 'Setup'
-    if 'nav_to' in st.session_state:
+    # Initialize session state
+    initialize_session_state()
+
+    # ====================================================================
+    # CROSS-PAGE NAVIGATION HANDLER
+    # ====================================================================
+    menu_options = ['⚙️ Settings', '🏠 Home', '👥 People', '📊 Employee Insights', '🎯 Predict Attrition', '🔍 Why They Leave', '💰 Budget Planner', '🤖 AI Assistant', '🧪 AI Research Lab', '🚀 Strategic Roadmap', '📖 Data Dictionary']
+    
+    default_idx = 1  # Default to 'Home'
+    if 'nav_to' in st.session_state and st.session_state['nav_to']:
         target_page = st.session_state.pop('nav_to')
         if target_page in menu_options:
             default_idx = menu_options.index(target_page)
@@ -888,18 +864,18 @@ def main():
         y_train = st.session_state.get('global_y_train', pd.Series([0]))
         y_test = st.session_state.get('global_y_test', pd.Series([0]))
         preprocessor = pipeline.named_steps['preprocessor']
+        feature_columns = [c for c in df.columns if c != 'left']
         st.toast("✅ Using Custom Uploaded Company Data", icon="📊")
     else:
         @st.cache_data
         def load_data_and_train_model(_model_version="v4_calibrated"):
             # FIX: App crash protection if CSV missing
             if not os.path.exists('HR_comma_sep.csv'):
-                st.error("❌ Default dataset 'HR_comma_sep.csv' not found. Please go to ⚙️ Global Setup to upload your data.")
+                st.error("❌ Default dataset 'HR_comma_sep.csv' not found. Please go to ⚙️ Settings to upload your data.")
                 st.stop()
                 
             st.write("📂 Step 1/3: Loading Dataset from CSV...")
             df = pd.read_csv('HR_comma_sep.csv')
-            st.session_state.data_loaded_time = datetime.now()
             
             st.write("🧹 Step 2/3: Preprocessing & Splitting Data...")
             df_original = df.copy()
@@ -939,15 +915,11 @@ def main():
                 ('classifier', lgb.LGBMClassifier(**best_params))])
             
             final_pipeline.fit(X_train, y_train)
+            feature_columns = list(X.columns)
             
-            # Calculate and store model accuracy
-            y_pred = final_pipeline.predict(X_test)
-            accuracy = accuracy_score(y_test, y_pred)
-            st.session_state.model_accuracy = accuracy
-            
-            return final_pipeline, df_original, X_train, X_test, y_train, y_test, preprocessor, categorical_features, numerical_features
+            return final_pipeline, df_original, X_train, X_test, y_train, y_test, preprocessor, categorical_features, numerical_features, feature_columns
 
-        pipeline, df, X_train_ref, X_test_cur, y_train, y_test, preprocessor, cat_feat, num_feat = load_data_and_train_model(_model_version="v4_calibrated")
+        pipeline, df, X_train_ref, X_test_cur, y_train, y_test, preprocessor, cat_feat, num_feat, feature_columns = load_data_and_train_model(_model_version="v4_calibrated")
         st.empty()
 
     @st.cache_data
@@ -977,34 +949,17 @@ def main():
     def get_retention_strategies(employee_data):
         strategies = []
         if isinstance(employee_data, pd.DataFrame): employee_data = employee_data.iloc[0]
-        if 'satisfaction_level' in employee_data.index and employee_data['satisfaction_level'] <= 0.45: strategies.append("🗣️ Conduct 1-on-1 meeting.")
+        if 'satisfaction_level' in employee_data.index and employee_data['satisfaction_level'] <= 0.45: strategies.append("🗣️ Conduct 1-on-1 meeting to understand concerns")
         if 'number_project' in employee_data.index:
-            if employee_data['number_project'] <= 2: strategies.append("📈 Discuss career aspirations.")
-            if employee_data['number_project'] >= 6: strategies.append("⚠️ Assess workload/burnout.")
+            if employee_data['number_project'] <= 2: strategies.append("📈 Discuss career aspirations and growth opportunities")
+            if employee_data['number_project'] >= 6: strategies.append("⚠️ Assess workload and consider project rebalancing")
         if 'time_spend_company' in employee_data.index and 'promotion_last_5years' in employee_data.index:
-            if employee_data['time_spend_company'] >= 4 and employee_data['promotion_last_5years'] == 0: strategies.append("📊 Develop career path.")
+            if employee_data['time_spend_company'] >= 4 and employee_data['promotion_last_5years'] == 0: strategies.append("📊 Develop clear career path and promotion roadmap")
         if 'last_evaluation' in employee_data.index and 'satisfaction_level' in employee_data.index:
-            if employee_data['last_evaluation'] >= 0.8 and employee_data['satisfaction_level'] < 0.6: strategies.append("🏆 Acknowledge high performance.")
-        if not strategies: strategies.append("✅ Monitor engagement.")
+            if employee_data['last_evaluation'] >= 0.8 and employee_data['satisfaction_level'] < 0.6: strategies.append("🏆 Acknowledge high performance with recognition/reward")
+        if 'average_montly_hours' in employee_data.index and employee_data['average_montly_hours'] > 240: strategies.append("⏰ Address burnout risk - consider flexible hours or time off")
+        if not strategies: strategies.append("✅ Employee appears stable - continue regular engagement monitoring")
         return strategies
-
-    # --- NEW: Helper function for data freshness ---
-    def get_freshness_badge():
-        time_since_load = datetime.now() - st.session_state.data_loaded_time
-        hours_since = time_since_load.total_seconds() / 3600
-        
-        if hours_since < 1:
-            return '<span class="freshness-badge freshness-fresh">🟢 Data: Fresh (Just loaded)</span>'
-        elif hours_since < 24:
-            return '<span class="freshness-badge freshness-fresh">🟢 Data: Fresh (< 24h ago)</span>'
-        elif hours_since < 72:
-            return f'<span class="freshness-badge freshness-stale">🟡 Data: {int(hours_since)}h ago</span>'
-        else:
-            return f'<span class="freshness-badge freshness-stale">🔴 Data: {int(hours_since/24)}d ago - Consider updating</span>'
-
-    # --- NEW: Privacy badge ---
-    def get_privacy_badge():
-        return '<span class="privacy-badge">🔒 No data leaves your system • Local processing only</span>'
 
     # --- SIDEBAR ---
     with st.sidebar:
@@ -1017,15 +972,14 @@ def main():
         <hr style='border-color: #30363d; margin: 20px 0;'>
         """, unsafe_allow_html=True)
         
-        # NEW: Show data freshness in sidebar
-        st.markdown(get_freshness_badge(), unsafe_allow_html=True)
-        st.markdown(get_privacy_badge(), unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
+        # NEW: Notification badge
+        alert_count = len(st.session_state.alert_history)
+        menu_icons = ['gear', 'house', 'people-fill', 'bar-chart-line-fill', "graph-up-arrow", 'search', 'currency-rupee', 'robot', 'cpu', 'flag-2-fill', 'book']
         
         page = option_menu(
             menu_title=None,
             options=menu_options,  
-            icons=['gear', 'house', 'search', 'bar-chart-line-fill', "graph-up-arrow", 'helpful-tip-fill', 'building', 'currency-rupee', 'chat-heart', 'list-check', 'robot', 'cpu', 'flag-2-fill', 'file-arrow-down'], 
+            icons=menu_icons, 
             menu_icon="cast", default_index=default_idx, 
             styles={
                 "container": {"padding": "0!important", "background-color": 'transparent'},
@@ -1035,343 +989,407 @@ def main():
             }
         )
         
+        # NEW: Quick Stats in Sidebar
+        st.markdown("<br><hr style='border-color: #30363d; margin: 10px 0;'><br>", unsafe_allow_html=True)
+        st.markdown("**📊 Quick Stats**", unsafe_allow_html=True)
+        total_emp = len(df)
+        attrition = (df['left'].sum() / total_emp * 100) if 'left' in df.columns else 0
+        st.metric("Total Employees", f"{total_emp:,}")
+        st.metric("Attrition Rate", f"{attrition:.1f}%")
+        
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown("<div style='text-align:center; padding:20px; border-top:1px solid #2d333b;'><div style='font-size:0.85rem; color:#8b949e;'>Built by</div><div style='font-size:1.6rem; font-weight:600; color:#00E5A8; margin-bottom:10px;'>Nisarg Rathod</div><div style='display:flex; justify-content:center; gap:15px;'><a href='https://www.linkedin.com/in/nisarg-rathod/' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#0A66C2; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkedin.svg' width='16' height='16' style='filter:invert(1);'/>LinkedIn</a><a href='https://github.com/nisargrathod' target='_blank'style='display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; background:#24292e; color:white; text-decoration:none; font-size:0.9rem;'><img src='https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/github.svg' width='16' height='16' style='filter:invert(1);'/>GitHub</a></div></div>", unsafe_allow_html=True)
 
     # ====================================================================
-    # PAGE: GLOBAL SETUP (ENHANCED with Data Quality Report)
+    # PAGE: SETTINGS (Renamed from Global Setup)
     # ====================================================================
-    if page == "⚙️ Global Setup":
-        st.header("⚙️ Global Setup: Upload Your Company Data")
-        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Turn this AI into your company's dedicated assistant. Upload your HR dataset, and the system will automatically retrain itself.</p>", unsafe_allow_html=True)
+    if page == "⚙️ Settings":
+        st.header("⚙️ System Settings")
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Configure your RetainAI instance.</p>", unsafe_allow_html=True)
         
-        # NEW: About This Tool section
-        with st.expander("ℹ️ About This Tool", expanded=False):
-            st.markdown("""
-            **RetainAI** is an enterprise-grade workforce intelligence platform that helps HR teams:
-            
-            - 🎯 **Predict** which employees are likely to leave
-            - 🔍 **Explain** why employees leave using AI explainability (SHAP, Causal Analysis)
-            - 💰 **Optimize** retention budget using mathematical optimization (MILP)
-            - 📧 **Communicate** with AI-generated email drafts
-            - 📈 **Plan** strategic interventions with 12-month projections
-            
-            **How it works:**
-            1. Upload your HR data (or use demo data)
-            2. AI trains a LightGBM model on your data
-            3. Use various tools to analyze and take action
-            
-            **Privacy:** All data processing happens locally. No data is sent to external servers except for AI text generation (Groq API).
-            """)
+        tab_data, tab_config, tab_api = st.tabs(["📁 Data Upload", "⚙️ Configuration", "🔑 API Keys"])
         
-        uploaded_file = st.file_uploader("Upload your HR Dataset (CSV format)", type=["csv"])
-        if uploaded_file is not None:
-            try:
-                new_df = pd.read_csv(uploaded_file)
-                st.success("✅ File uploaded successfully!")
-                
-                # NEW: Data Quality Report
-                with st.expander("📋 Data Quality Report", expanded=True):
-                    quality_report = generate_data_quality_report(new_df)
+        with tab_data:
+            st.markdown("### Upload Your Company Data")
+            st.markdown("<p style='color: #8b949e;'>Turn this AI into your company's dedicated assistant.</p>", unsafe_allow_html=True)
+            uploaded_file = st.file_uploader("Upload your HR Dataset (CSV format)", type=["csv"])
+            if uploaded_file is not None:
+                try:
+                    new_df = pd.read_csv(uploaded_file)
+                    st.success("✅ File uploaded successfully!"); st.dataframe(new_df.head())
+                    st.markdown("---"); st.markdown("### Step 1: Identify the Target (Attrition Column)")
+                    target_col = st.selectbox("Which column indicates if the employee left?", new_df.columns)
+                    unique_vals = new_df[target_col].unique(); left_value = st.selectbox(f"In '{target_col}', which value means 'Left'?", unique_vals)
+                    st.markdown("---"); st.markdown("### Step 2: Data Preprocessing Settings")
+                    feature_cols = [c for c in new_df.columns if c != target_col]
+                    categorical_auto = new_df[feature_cols].select_dtypes(include=['object', 'category']).columns.tolist()
+                    numerical_auto = new_df[feature_cols].select_dtypes(include=np.number).columns.tolist()
+                    c_type, c_num = st.columns(2)
+                    with c_type: st.write("**Text Columns**"); st.write(categorical_auto if categorical_auto else "None")
+                    with c_num: st.write("**Number Columns**"); st.write(numerical_auto if numerical_auto else "None")
                     
-                    col_q1, col_q2, col_q3, col_q4 = st.columns(4)
-                    col_q1.metric("Total Records", f"{quality_report['total_records']:,}")
-                    col_q2.metric("Missing Values", f"{quality_report['missing_values']:,}")
-                    col_q3.metric("Duplicate Rows", f"{quality_report['duplicate_rows']:,}")
-                    col_q4.metric("Memory Usage", f"{quality_report['memory_usage_mb']:.2f} MB")
-                    
-                    col_q5, col_q6 = st.columns(2)
-                    col_q5.metric("Numeric Columns", quality_report['numeric_columns'])
-                    col_q6.metric("Categorical Columns", quality_report['categorical_columns'])
-                    
-                    if quality_report['issues']:
-                        st.markdown("### ⚠️ Issues Detected")
-                        for issue in quality_report['issues']:
-                            st.warning(issue)
+                    # Data quality checks
+                    st.markdown("---")
+                    st.markdown("### 📋 Data Quality Report")
+                    missing = new_df.isnull().sum()
+                    if missing.sum() > 0:
+                        st.warning(f"⚠️ Found {missing.sum()} missing values across {len(missing[missing > 0])} columns")
+                        with st.expander("See missing values"):
+                            st.dataframe(missing[missing > 0])
                     else:
-                        st.success("✅ No data quality issues detected!")
+                        st.success("✅ No missing values detected")
                     
-                    if quality_report['class_distribution']:
-                        st.markdown("### 📊 Class Distribution (Attrition)")
-                        for val, count in quality_report['class_distribution'].items():
-                            pct = (count / quality_report['total_records']) * 100
-                            st.write(f"- **Class {val}**: {count:,} records ({pct:.1f}%)")
-                
-                st.dataframe(new_df.head())
-                st.markdown("---"); st.markdown("### Step 1: Identify the Target (Attrition Column)")
-                target_col = st.selectbox("Which column indicates if the employee left?", new_df.columns)
-                unique_vals = new_df[target_col].unique(); left_value = st.selectbox(f"In '{target_col}', which value means 'Left'?", unique_vals)
-                st.markdown("---"); st.markdown("### Step 2: Data Preprocessing Settings")
-                feature_cols = [c for c in new_df.columns if c != target_col]
-                categorical_auto = new_df[feature_cols].select_dtypes(include=['object', 'category']).columns.tolist()
-                numerical_auto = new_df[feature_cols].select_dtypes(include=np.number).columns.tolist()
-                c_type, c_num = st.columns(2)
-                with c_type: st.write("**Text Columns**"); st.write(categorical_auto if categorical_auto else "None")
-                with c_num: st.write("**Number Columns**"); st.write(numerical_auto if numerical_auto else "None")
-                if st.button("🚀 Train Custom AI Model", type="primary"):
-                    with st.spinner("🤖 AI is learning your data..."):
-                        y = new_df[target_col].apply(lambda x: 1 if x == left_value else 0); X = new_df[feature_cols]
-                        valid_idx = X.dropna().index; X_clean = X.loc[valid_idx]; y_clean = y.loc[valid_idx]
-                        
-                        if len(categorical_auto) == 0: preprocessor_global = ColumnTransformer(transformers=[('num', 'passthrough', numerical_auto)])
-                        else: preprocessor_global = ColumnTransformer(transformers=[('num', 'passthrough', numerical_auto), ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_auto)])
-                        
-                        X_train_g, X_test_g, y_train_g, y_test_g = train_test_split(X_clean, y_clean, test_size=0.2, random_state=42)
-                        
-                        spw = min((y_train_g == 0).sum() / (y_train_g == 1).sum(), 2.0) if (y_train_g == 1).sum() > 0 else 1.0
-                        
-                        global_pipeline = Pipeline(steps=[('preprocessor', preprocessor_global), ('classifier', lgb.LGBMClassifier(n_estimators=150, learning_rate=0.05, num_leaves=12, max_depth=4, min_child_samples=40, reg_alpha=0.5, reg_lambda=0.5, subsample=0.8, colsample_bytree=0.8, random_state=42, verbose=-1, scale_pos_weight=spw))])
-                        global_pipeline.fit(X_train_g, y_train_g)
-                        y_pred_g = global_pipeline.predict(X_test_g); 
-                        
-                        # Calculate comprehensive metrics
-                        acc = accuracy_score(y_test_g, y_pred_g)
-                        prec = precision_score(y_test_g, y_pred_g, zero_division=0)
-                        rec = recall_score(y_test_g, y_pred_g, zero_division=0)
-                        f1 = f1_score(y_test_g, y_pred_g, zero_division=0)
-                        roc = roc_auc_score(y_test_g, global_pipeline.predict_proba(X_test_g)[:, 1]) if len(y_test_g.unique()) > 1 else 0
-                        
-                        st.session_state.model_accuracy = acc
-                        
-                        final_df = new_df.loc[valid_idx].copy(); final_df['left'] = y_clean
-                        st.session_state['global_pipeline'] = global_pipeline; st.session_state['global_df'] = final_df
-                        st.session_state['global_X_train'] = X_train_g; st.session_state['global_X_test'] = X_test_g
-                        st.session_state['global_y_train'] = y_train_g; st.session_state['global_y_test'] = y_test_g; st.session_state['is_global'] = True
-                        st.session_state.data_loaded_time = datetime.now()
-                        
-                        st.success(f"🎉 Training Complete!")
-                        
-                        # NEW: Show model performance
-                        with st.expander("📊 Model Performance Metrics", expanded=True):
-                            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-                            col_m1.metric("Accuracy", f"{acc:.1%}")
-                            col_m2.metric("Precision", f"{prec:.1%}")
-                            col_m3.metric("Recall", f"{rec:.1%}")
-                            col_m4.metric("F1 Score", f"{f1:.1%}")
-                            st.metric("ROC AUC", f"{roc:.1%}")
+                    duplicates = new_df.duplicated().sum()
+                    if duplicates > 0:
+                        st.info(f"ℹ️ Found {duplicates} duplicate rows (will be removed during training)")
+                    
+                    if st.button("🚀 Train Custom AI Model", type="primary"):
+                        with st.spinner("🤖 AI is learning your data..."):
+                            y = new_df[target_col].apply(lambda x: 1 if x == left_value else 0); X = new_df[feature_cols]
+                            valid_idx = X.dropna().index; X_clean = X.loc[valid_idx]; y_clean = y.loc[valid_idx]
                             
-                            st.info("""
-                            **What these metrics mean:**
-                            - **Accuracy**: Overall correctness of predictions
-                            - **Precision**: When AI says "Leave", how often is it right?
-                            - **Recall**: Of all who actually left, how many did AI catch?
-                            - **F1 Score**: Balance between Precision and Recall
-                            - **ROC AUC**: Model's ability to distinguish between classes (0.5 = random, 1.0 = perfect)
-                            """)
-                        
-                        # Auto-navigate to Home after setup
-                        st.session_state['nav_to'] = "Home"
-                        st.rerun()
-            except Exception as e: st.error(f"Error: {e}")
-        if st.button("🔄 Reset to Default Demo Data"):
-            if 'is_global' in st.session_state: del st.session_state['is_global']
-            st.session_state.data_loaded_time = datetime.now()
-            st.rerun()
+                            if len(categorical_auto) == 0: preprocessor_global = ColumnTransformer(transformers=[('num', 'passthrough', numerical_auto)])
+                            else: preprocessor_global = ColumnTransformer(transformers=[('num', 'passthrough', numerical_auto), ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_auto)])
+                            
+                            X_train_g, X_test_g, y_train_g, y_test_g = train_test_split(X_clean, y_clean, test_size=0.2, random_state=42)
+                            
+                            spw = min((y_train_g == 0).sum() / (y_train_g == 1).sum(), 2.0) if (y_train_g == 1).sum() > 0 else 1.0
+                            
+                            global_pipeline = Pipeline(steps=[('preprocessor', preprocessor_global), ('classifier', lgb.LGBMClassifier(n_estimators=150, learning_rate=0.05, num_leaves=12, max_depth=4, min_child_samples=40, reg_alpha=0.5, reg_lambda=0.5, subsample=0.8, colsample_bytree=0.8, random_state=42, verbose=-1, scale_pos_weight=spw))])
+                            global_pipeline.fit(X_train_g, y_train_g)
+                            y_pred_g = global_pipeline.predict(X_test_g)
+                            
+                            # Calculate multiple metrics
+                            acc = accuracy_score(y_test_g, y_pred_g)
+                            prec = precision_score(y_test_g, y_pred_g, zero_division=0)
+                            rec = recall_score(y_test_g, y_pred_g, zero_division=0)
+                            f1 = f1_score(y_test_g, y_pred_g, zero_division=0)
+                            
+                            final_df = new_df.loc[valid_idx].copy(); final_df['left'] = y_clean
+                            st.session_state['global_pipeline'] = global_pipeline; st.session_state['global_df'] = final_df
+                            st.session_state['global_X_train'] = X_train_g; st.session_state['global_X_test'] = X_test_g
+                            st.session_state['global_y_train'] = y_train_g; st.session_state['global_y_test'] = y_test_g
+                            st.session_state['is_global'] = True
+                            
+                            st.success(f"🎉 Training Complete!")
+                            c1, c2, c3, c4 = st.columns(4)
+                            c1.metric("Accuracy", f"{acc:.1%}")
+                            c2.metric("Precision", f"{prec:.1%}")
+                            c3.metric("Recall", f"{rec:.1%}")
+                            c4.metric("F1 Score", f"{f1:.1%}")
+                            
+                            st.session_state['nav_to'] = "🏠 Home"
+                            sleep(1)
+                            st.rerun()
+                except Exception as e: st.error(f"Error: {e}")
+            if st.button("🔄 Reset to Default Demo Data"):
+                if 'is_global' in st.session_state: del st.session_state['is_global']
+                st.rerun()
+        
+        with tab_config:
+            st.markdown("### 🌍 Regional Settings")
+            st.markdown("<p style='color: #8b949e;'>Configure currency and thresholds for your region.</p>", unsafe_allow_html=True)
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                currency_options = {'₹ INR': '₹', '$ USD': '$', '€ EUR': '€', '£ GBP': '£'}
+                selected_currency = st.selectbox("Currency", list(currency_options.keys()))
+                st.session_state.app_settings['currency'] = currency_options[selected_currency]
+                st.session_state.app_settings['currency_name'] = selected_currency.split(' ')[1]
+                
+                st.markdown("---")
+                st.markdown("### 💰 Salary Bands (Annual)")
+                st.session_state.app_settings['salary_low'] = st.number_input("Low Salary", value=st.session_state.app_settings['salary_low'], step=50000)
+                st.session_state.app_settings['salary_medium'] = st.number_input("Medium Salary", value=st.session_state.app_settings['salary_medium'], step=50000)
+                st.session_state.app_settings['salary_high'] = st.number_input("High Salary", value=st.session_state.app_settings['salary_high'], step=50000)
+            
+            with c2:
+                st.markdown("### ⚠️ Alert Thresholds")
+                st.session_state.app_settings['attrition_threshold'] = st.slider("Attrition Rate Alert (%)", 5, 40, st.session_state.app_settings['attrition_threshold'], 1)
+                st.session_state.app_settings['satisfaction_threshold'] = st.slider("Satisfaction Alert", 0.1, 0.9, st.session_state.app_settings['satisfaction_threshold'], 0.05)
+                st.session_state.app_settings['hours_threshold'] = st.slider("Hours Alert", 150, 300, st.session_state.app_settings['hours_threshold'], 10)
+                
+                st.markdown("---")
+                if st.button("💾 Save Settings"):
+                    st.success("✅ Settings saved!")
+            
+            st.markdown("---")
+            st.markdown("### Current Configuration")
+            st.json(st.session_state.app_settings)
+        
+        with tab_api:
+            st.markdown("### 🔑 API Key Configuration")
+            st.markdown("<p style='color: #8b949e;'>Configure API keys for AI features.</p>", unsafe_allow_html=True)
+            
+            st.markdown("""
+            <div class="custom-card">
+                <h4 style='color: #17B794; margin-top: 0;'>🤖 Groq AI (for Email Drafting)</h4>
+                <p style='margin-bottom: 10px;'>Used for: AI Assistant, Strategic Roadmap, AI Research Lab</p>
+                <p><strong>Get free API key:</strong> <a href='https://console.groq.com' target='_blank' style='color: #17B794;'>console.groq.com</a></p>
+                <p><strong>Setup:</strong> Add to Streamlit Secrets as <code>GROQ_API_KEY</code></p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Test API key
+            if st.button("🔗 Test API Connection"):
+                llm, error = get_groq_llm()
+                if error == "API_KEY_MISSING":
+                    st.error("❌ API key not configured")
+                elif error:
+                    st.error(f"❌ Connection failed: {error}")
+                else:
+                    st.success("✅ API connection successful!")
 
     # ====================================================================
-    # PAGE: HOME (ENHANCED WITH MORE FEATURES)
+    # PAGE: HOME (ENHANCED WITH ONBOARDING & ALERTS)
     # ====================================================================
-    if page == "Home":
+    if page == "🏠 Home":
+        # NEW: First-time onboarding
+        if st.session_state.first_visit and not st.session_state.onboarding_complete:
+            st.markdown("""
+            <div class="onboarding-container">
+                <h1 style='color: #17B794; margin-bottom: 10px;'>👋 Welcome to RetainAI</h1>
+                <p style='color: #c9d1d9; font-size: 1.1rem; margin-bottom: 30px;'>Your AI-powered workforce intelligence platform. Here's how to get started:</p>
+                
+                <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; text-align: left;'>
+                    <div class='onboarding-step'>
+                        <div class='step-number'>1</div>
+                        <h4 style='color: white; margin: 10px 0;'>Upload Your Data</h4>
+                        <p style='color: #8b949e;'>Go to ⚙️ Settings to upload your HR dataset, or use the demo data to explore.</p>
+                    </div>
+                    <div class='onboarding-step'>
+                        <div class='step-number'>2</div>
+                        <h4 style='color: white; margin: 10px 0;'>Explore Insights</h4>
+                        <p style='color: #8b949e;'>Check the 🏠 Home dashboard for alerts, then explore 📊 Employee Insights.</p>
+                    </div>
+                    <div class='onboarding-step'>
+                        <div class='step-number'>3</div>
+                        <h4 style='color: white; margin: 10px 0;'>Predict & Act</h4>
+                        <p style='color: #8b949e;'>Use 🎯 Predict Attrition to assess individual employees and get retention strategies.</p>
+                    </div>
+                </div>
+                
+                <br>
+                <p style='color: #8b949e;'>💡 <strong>Tip:</strong> Visit 📖 Data Dictionary anytime to understand what each metric means.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("✅ Got it, take me to the dashboard", type="primary"):
+                st.session_state.first_visit = False
+                st.session_state.onboarding_complete = True
+                st.rerun()
+            st.stop()
+        
         st.markdown("<h1 style='margin-bottom: 5px;'>👋 Welcome Back, HR Manager</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af; font-size: 1.1rem; margin-top: 0;'>Here is your workforce overview.</p>", unsafe_allow_html=True)
         
-        # NEW: Show data freshness and model accuracy
-        col_info1, col_info2, col_info3 = st.columns(3)
-        with col_info1:
-            st.markdown(get_freshness_badge(), unsafe_allow_html=True)
-        with col_info2:
-            if st.session_state.model_accuracy:
-                st.markdown(f'<span class="freshness-badge freshness-fresh">🤖 Model Accuracy: {st.session_state.model_accuracy:.1%}</span>', unsafe_allow_html=True)
-            else:
-                st.markdown('<span class="freshness-badge freshness-stale">🤖 Model: Loading...</span>', unsafe_allow_html=True)
-        with col_info3:
-            st.markdown(get_privacy_badge(), unsafe_allow_html=True)
+        # NEW: Last updated timestamp
+        st.caption(f"📊 Data as of: {datetime.now().strftime('%B %d, %Y at %H:%M')}")
         
-        st.markdown("<br>", unsafe_allow_html=True)
+        total_employees = len(df)
+        attrition_rate = (df['left'].sum() / len(df)) * 100 if 'left' in df.columns else 0
         
-        total_employees = len(df); attrition_rate = (df['left'].sum() / len(df)) * 100
+        # Get settings
+        settings = st.session_state.app_settings
         
         # PROACTIVE ALERT SYSTEM
         alerts = []
-        if attrition_rate > 20: alerts.append(("🚨 CRITICAL", f"Overall Attrition rate is {attrition_rate:.1f}% (Exceeds 20% threshold)"))
-        if 'satisfaction_level' in df.columns and df['satisfaction_level'].mean() < 0.5: alerts.append(("⚠️ WARNING", "Average Employee Satisfaction is critically low (<50%)"))
-        if 'average_montly_hours' in df.columns and df['average_montly_hours'].mean() > 200: alerts.append(("⚠️ WARNING", "High Average Working Hours detected (Burnout risk)"))
+        if attrition_rate > settings['attrition_threshold']:
+            alert_msg = f"Overall Attrition rate is {attrition_rate:.1f}% (Exceeds {settings['attrition_threshold']}% threshold)"
+            alerts.append(("🚨 CRITICAL", alert_msg))
+            add_to_alert_history("CRITICAL", alert_msg)
         
-        for level, msg in alerts:
-            if "CRITICAL" in level: st.error(msg)
-            else: st.warning(msg)
+        if 'satisfaction_level' in df.columns and df['satisfaction_level'].mean() < settings['satisfaction_threshold']:
+            alert_msg = f"Average Employee Satisfaction is critically low ({df['satisfaction_level'].mean():.2f} < {settings['satisfaction_threshold']})"
+            alerts.append(("⚠️ WARNING", alert_msg))
+            add_to_alert_history("WARNING", alert_msg)
+            
+        if 'average_montly_hours' in df.columns and df['average_montly_hours'].mean() > settings['hours_threshold']:
+            alert_msg = f"High Average Working Hours detected ({df['average_montly_hours'].mean():.0f} > {settings['hours_threshold']} - Burnout risk)"
+            alerts.append(("⚠️ WARNING", alert_msg))
+            add_to_alert_history("WARNING", alert_msg)
         
+        # Display alerts
+        if alerts:
+            for level, msg in alerts:
+                if "CRITICAL" in level: st.error(msg)
+                else: st.warning(msg)
+            with st.expander("📋 View Alert History"):
+                if st.session_state.alert_history:
+                    alert_df = pd.DataFrame(st.session_state.alert_history)
+                    alert_df.columns = ['Level', 'Message', 'Timestamp']
+                    st.dataframe(alert_df, use_container_width=True)
+                    if st.button("Clear History"):
+                        st.session_state.alert_history = []
+                        st.rerun()
+                else:
+                    st.info("No alert history")
+        
+        # Metrics
         if 'satisfaction_level' in df.columns:
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Total Workforce", f"{total_employees:,}")
             col2.metric("Attrition Rate", f"{attrition_rate:.1f}%", delta="Current")
             col3.metric("Avg. Satisfaction", f"{df['satisfaction_level'].mean():.2f} / 1.0")
-            # NEW: Active employees metric
-            col4.metric("Active Employees", f"{(df['left']==0).sum():,}")
+            if 'average_montly_hours' in df.columns:
+                col4.metric("Avg. Monthly Hours", f"{df['average_montly_hours'].mean():.0f}")
         else:
             col1, col2 = st.columns(2)
             col1.metric("Total Workforce", f"{total_employees:,}")
             col2.metric("Attrition Rate", f"{attrition_rate:.1f}%", delta="Current")
         
-        # QUICK ACTIONS (CROSS-PAGE NAVIGATION)
+        # QUICK ACTIONS
         st.markdown("---")
         st.markdown("### ⚡ Quick Actions")
         c1, c2, c3, c4, c5 = st.columns(5)
         with c1:
-            if st.button("🔍 Search Employee", use_container_width=True):
-                st.session_state['nav_to'] = "Employee Search"
+            if st.button("👤 Find Employee", use_container_width=True):
+                st.session_state['nav_to'] = "👥 People"
                 st.rerun()
         with c2:
-            if st.button("🎯 Predict Employee", use_container_width=True):
-                st.session_state['nav_to'] = "Predict Attrition"
+            if st.button("🎯 Predict Risk", use_container_width=True):
+                st.session_state['nav_to'] = "🎯 Predict Attrition"
                 st.rerun()
         with c3:
-            if st.button("💰 Budget Planner", use_container_width=True):
-                st.session_state['nav_to'] = "Budget Planner"
+            if st.button("💰 Budget Plan", use_container_width=True):
+                st.session_state['nav_to'] = "💰 Budget Planner"
                 st.rerun()
         with c4:
-            if st.button("💬 Stay Interviews", use_container_width=True):
-                st.session_state['nav_to'] = "Stay Interviews"
+            if st.button("📧 Draft Email", use_container_width=True):
+                st.session_state['nav_to'] = "🤖 AI Assistant"
                 st.rerun()
         with c5:
-            if st.button("📋 Action Tracker", use_container_width=True):
-                st.session_state['nav_to'] = "Action Tracker"
+            if st.button("🚀 6-Month Plan", use_container_width=True):
+                st.session_state['nav_to'] = "🚀 Strategic Roadmap"
                 st.rerun()
 
         # AT-RISK EMPLOYEE LIST
         st.markdown("---")
         st.markdown("### 🔴 Top 10 At-Risk Employees (Currently Working)")
-        st.caption("Predicted by AI as most likely to leave. Click 'Predict Employee' to see detailed retention strategies.")
+        st.caption("Predicted by AI as most likely to leave. Click 'Find Employee' to search for specific people.")
         
         current_df = df[df['left'] == 0].copy()
         if len(current_df) > 0:
             feature_columns_home = [c for c in df.columns if c != 'left']
             risks = pipeline.predict_proba(current_df[feature_columns_home])[:, 1]
             current_df['Risk_Score'] = calibrate_probability_array(risks)
+            
+            # Add confidence intervals
+            current_df['Risk_Lower'] = current_df['Risk_Score'].apply(lambda x: calculate_confidence_interval(x)[0])
+            current_df['Risk_Upper'] = current_df['Risk_Score'].apply(lambda x: calculate_confidence_interval(x)[1])
+            
             top_risk = current_df.nlargest(10, 'Risk_Score')
             
             for idx, row in top_risk.iterrows():
                 risk_pct = row['Risk_Score'] * 100
+                risk_label, risk_color = get_risk_label(row['Risk_Score'])
                 dept = row.get('Department', 'N/A')
                 salary = row.get('salary', 'N/A')
+                confidence_range = f"{row['Risk_Lower']*100:.0f}-{row['Risk_Upper']*100:.0f}%"
                 
-                # NEW: Status pill based on risk level
-                if risk_pct > 70: status_class, status_text = "status-high", "HIGH RISK"
-                elif risk_pct > 50: status_class, status_text = "status-medium", "MEDIUM RISK"
-                else: status_class, status_text = "status-low", "LOW RISK"
-                
-                color = "#FF4B4B" if risk_pct > 70 else "#EEB76B" if risk_pct > 50 else "#17B794"
                 st.markdown(f"""
-                <div style='background:{color}15; border-left:4px solid {color}; padding:10px 15px; margin:5px 0; border-radius:0 8px 8px 0; display:flex; justify-content:space-between; align-items:center;'>
-                    <span><strong>{dept}</strong> | {salary.title()} Salary</span>
-                    <span style='display:flex; align-items:center; gap:10px;'>
-                        <span class='status-pill {status_class}'>{status_text}</span>
-                        <span style='color:{color}; font-weight:700;'>Risk: {risk_pct:.1f}%</span>
-                    </span>
+                <div style='background:{risk_color}10; border-left:4px solid {risk_color}; padding:12px 15px; margin:8px 0; border-radius:0 8px 8px 0; display:flex; justify-content:space-between; align-items:center;'>
+                    <div>
+                        <strong>{dept}</strong> | {salary.title()} Salary
+                        <br><small style='color: #8b949e;'>Confidence: {confidence_range}</small>
+                    </div>
+                    <div style='text-align: right;'>
+                        <span style='color:{risk_color}; font-weight:700; font-size: 1.1rem;'>{risk_label}: {risk_pct:.1f}%</span>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
             st.info("No current employees found in dataset.")
         
         st.markdown("---")
-        st.markdown("### 📄 Employee Data Snapshot")
-        st.dataframe(df.head(100), use_container_width=True)
+        with st.expander("📄 View Raw Data"):
+            st.dataframe(df.head(100), use_container_width=True)
+            csv = dataframe_to_csv_download(df.head(100), "employee_data.csv")
+            st.download_button("⬇️ Download Data", csv, "employee_data.csv", "text/csv")
 
     # ====================================================================
-    # NEW PAGE: EMPLOYEE SEARCH
+    # NEW PAGE: PEOPLE (Employee Search & Lookup)
     # ====================================================================
-    if page == "Employee Search":
-        st.header("🔍 Employee Search")
-        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Search for specific employees by name, department, or any attribute and see their attrition risk instantly.</p>", unsafe_allow_html=True)
+    if page == "👥 People":
+        st.header("👥 People Directory")
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Search and explore individual employee profiles.</p>", unsafe_allow_html=True)
         
-        feature_columns = [c for c in df.columns if c != 'left']
+        # Search bar
+        col_search1, col_search2 = st.columns([3, 1])
+        with col_search1:
+            search_query = st.text_input("🔍 Search employees...", placeholder="Search by department, salary, or any value...")
+        with col_search2:
+            search_by = st.selectbox("Filter by", ["all", "department", "salary"], label_visibility="collapsed")
         
-        search_col1, search_col2 = st.columns([3, 1])
-        with search_col1:
-            search_term = st.text_input("Search employees...", placeholder="Type department name, salary tier, or any value...")
-        with search_col2:
-            st.markdown("<br>")
-            search_button = st.button("🔍 Search", type="primary", use_container_width=True)
+        # Apply search
+        if search_query:
+            search_results = search_employees(df, search_query, search_by)
+        else:
+            search_results = df.head(50)
         
-        if search_term and search_button:
-            results = employee_search(df, pipeline, search_term, feature_columns)
+        # Display results count
+        st.caption(f"Showing {len(search_results)} of {len(df)} employees")
+        
+        if len(search_results) > 0:
+            # Calculate risk scores for displayed employees
+            feature_cols_search = [c for c in df.columns if c != 'left']
+            search_display = search_results.copy()
+            risks = pipeline.predict_proba(search_display[feature_cols_search])[:, 1]
+            search_display['Risk Score'] = calibrate_probability_array(risks)
+            search_display['Risk Level'] = search_display['Risk Score'].apply(lambda x: get_risk_label(x)[0])
             
-            if len(results) == 0:
-                st.warning("No employees found matching your search.")
-            else:
-                st.success(f"Found {len(results)} matching employee(s)")
+            # Display as cards
+            for idx, row in search_display.head(20).iterrows():
+                risk_label, risk_color = get_risk_label(row['Risk Score'])
+                risk_pct = row['Risk Score'] * 100
                 
-                for result in results[:20]:  # Limit to 20 results
-                    risk_pct = result['risk_score'] * 100
-                    employee = result['data']
-                    
-                    # Determine risk status
-                    if risk_pct > 70: 
-                        status_class, status_text, bg_color = "status-high", "HIGH RISK", "#FF4B4B"
-                    elif risk_pct > 50: 
-                        status_class, status_text, bg_color = "status-medium", "MEDIUM RISK", "#EEB76B"
-                    else: 
-                        status_class, status_text, bg_color = "status-low", "LOW RISK", "#17B794"
-                    
-                    # Create employee info string
-                    info_parts = []
-                    for col in df.columns:
-                        if col != 'left' and col != 'Risk_Score':
-                            val = employee[col]
-                            if pd.notna(val):
-                                info_parts.append(f"<strong>{col.replace('_', ' ').title()}:</strong> {val}")
-                    
-                    info_html = " | ".join(info_parts[:5])  # Show first 5 attributes
-                    
-                    st.markdown(f"""
-                    <div style='background:{bg_color}15; border-left:4px solid {bg_color}; padding:15px; margin:10px 0; border-radius:0 12px 12px 0;'>
-                        <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>
-                            <span style='color:#e6edf3; font-size:0.9rem;'>{info_html}</span>
-                            <span class='status-pill {status_class}'>{status_text}: {risk_pct:.1f}%</span>
+                # Build info string
+                info_parts = []
+                if 'Department' in row.index: info_parts.append(f"🏢 {row['Department']}")
+                if 'salary' in row.index: info_parts.append(f"💰 {row['salary'].title()}")
+                if 'time_spend_company' in row.index: info_parts.append(f"📅 {int(row['time_spend_company'])} years")
+                if 'number_project' in row.index: info_parts.append(f"📂 {int(row['number_project'])} projects")
+                if 'satisfaction_level' in row.index: info_parts.append(f"😊 {row['satisfaction_level']:.2f}")
+                
+                status = "Left" if row.get('left', 0) == 1 else "Active"
+                status_color = "#FF4B4B" if status == "Left" else "#17B794"
+                
+                st.markdown(f"""
+                <div class='search-result-item' style='border-left: 4px solid {risk_color};'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <div>
+                            <strong style='color: white;'>Employee #{idx}</strong>
+                            <span style='color: {status_color}; margin-left: 10px; font-size: 0.85rem;'>● {status}</span>
+                            <br>
+                            <small style='color: #8b949e;'>{' | '.join(info_parts)}</small>
                         </div>
-                        <div class='confidence-bar'>
-                            <div class='confidence-fill' style='width:{risk_pct}%; background-color:{bg_color};'></div>
+                        <div style='text-align: right;'>
+                            <div style='color: {risk_color}; font-weight: 700; font-size: 1.1rem;'>{risk_label}</div>
+                            <div style='color: #8b949e; font-size: 0.85rem;'>Risk: {risk_pct:.1f}%</div>
                         </div>
                     </div>
-                    """, unsafe_allow_html=True)
-        
-        elif search_term and not search_button:
-            st.info("Press the Search button or Enter to search.")
+                </div>
+                """, unsafe_allow_html=True)
+            
+            if len(search_display) > 20:
+                st.info(f"Showing top 20 results. Refine your search for more specific results.")
+            
+            # Download search results
+            csv = dataframe_to_csv_download(search_display, "search_results.csv")
+            st.download_button("⬇️ Download Search Results", csv, "search_results.csv", "text/csv")
+        else:
+            st.info("No employees found matching your search criteria.")
 
     # ====================================================================
     # PAGE: EMPLOYEE INSIGHTS
     # ====================================================================
-    if page == "Employee Insights":
+    if page == "📊 Employee Insights":
         st.header("📉 Employee Data Analysis")
         st.write("Explore the workforce demographics to identify patterns.")
         
-        # NEW: Seasonal Trend Analysis
-        with st.expander("📅 Seasonal/Tenure Trend Analysis", expanded=False):
-            st.markdown("<p style='color: #9ca3af;'>Understanding when attrition peaks helps with proactive intervention timing.</p>", unsafe_allow_html=True)
-            trend_data = analyze_seasonal_trends(df)
-            if trend_data is not None:
-                fig_trend = px.line(
-                    trend_data, 
-                    x='Tenure_Years', 
-                    y='Attrition_Rate',
-                    title='Attrition Rate by Employee Tenure',
-                    template='plotly_dark',
-                    markers=True,
-                    color_discrete_sequence=['#17B794']
-                )
-                fig_trend.update_layout(
-                    xaxis_title="Years at Company",
-                    yaxis_title="Attrition Rate (%)",
-                    yaxis_range=[0, max(trend_data['Attrition_Rate'].max() * 1.2, 10)]
-                )
-                custome_layout(fig_trend, title_size=22)
-                st.plotly_chart(fig_trend, use_container_width=True)
-                
-                # Find peak attrition tenure
-                peak_row = trend_data.loc[trend_data['Attrition_Rate'].idxmax()]
-                st.info(f"📈 **Insight:** Attrition peaks at **{peak_row['Tenure_Years']:.0f} years** of tenure with **{peak_row['Attrition_Rate']:.1f}%** attrition rate. Consider targeted interventions at the {int(peak_row['Tenure_Years'])-1}-{int(peak_row['Tenure_Years'])+1} year mark.")
-            else:
-                st.warning("Tenure data not available for trend analysis.")
+        # NEW: Summary stats
+        with st.expander("📋 Quick Summary Statistics"):
+            st.dataframe(df.describe(), use_container_width=True)
         
         create_vizualization(df, viz_type="box", data_type="number")
         create_vizualization(df, viz_type="bar", data_type="object")
@@ -1379,14 +1397,14 @@ def main():
         st.plotly_chart(create_heat_map(df), use_container_width=True)
 
     # ====================================================================
-    # PAGE: PREDICT ATTRITION (ENHANCED with Confidence Intervals)
+    # PAGE: PREDICT ATTRITION (ENHANCED WITH CONFIDENCE & HISTORY)
     # ====================================================================
-    if page == "Predict Attrition":
-        tab_ind, tab_batch = st.tabs(["🎯 Individual Prediction", "📦 Batch Upload"])
+    if page == "🎯 Predict Attrition":
+        tab_ind, tab_batch, tab_history = st.tabs(["🎯 Individual Prediction", "📦 Batch Upload", "📜 Prediction History"])
         
         with tab_ind:
             st.markdown("<h1 style='margin-bottom: 5px;'>🎯 Predict Attrition</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='color: #9ca3af;'>Enter employee details to see if they will Stay or Leave.</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #9ca3af;'>Enter employee details to see if they will Stay or Leave, with confidence levels.</p>", unsafe_allow_html=True)
             
             with st.expander("🧪 Model Diagnostics (Verification)", expanded=False):
                 st.write("Not sure if the AI is working? Test it against real historical data:")
@@ -1398,9 +1416,8 @@ def main():
                         raw_prob = pipeline.predict_proba(test_df)[0][1]
                         calibrated_prob = calibrate_probability(raw_prob)
                         pred = 1 if calibrated_prob >= 0.5 else 0
-                        if pred == 1: st.success(f"✅ **Correct!** Prediction: Leave ({calibrated_prob:.1%})")
-                        else: st.error(f"❌ **Incorrect.** Prediction: Stay ({calibrated_prob:.1%})")
-                        st.json(sample.to_dict(), expanded=False)
+                        if pred == 1: st.success(f"✅ **Correct!** Prediction: Leave ({calibrated_prob*100:.1f}%)")
+                        else: st.error(f"❌ **Incorrect.** Prediction: Stay ({calibrated_prob*100:.1f}%)")
                 with c_test2:
                     if st.button("Test with Employee who Stayed"):
                         sample = df[df['left'] == 0].iloc[0]
@@ -1408,12 +1425,10 @@ def main():
                         raw_prob = pipeline.predict_proba(test_df)[0][1]
                         calibrated_prob = calibrate_probability(raw_prob)
                         pred = 1 if calibrated_prob >= 0.5 else 0
-                        if pred == 0: st.success(f"✅ **Correct!** Prediction: Stay ({calibrated_prob:.1%})")
-                        else: st.error(f"❌ **Incorrect.** Prediction: Leave ({calibrated_prob:.1%})")
-                        st.json(sample.to_dict(), expanded=False)
+                        if pred == 0: st.success(f"✅ **Correct!** Prediction: Stay ({(1-calibrated_prob)*100:.1f}%)")
+                        else: st.error(f"❌ **Incorrect.** Prediction: Leave ({calibrated_prob*100:.1f}%)")
 
             st.markdown("---")
-            feature_columns = [c for c in df.columns if c != 'left']
             is_default_data = 'satisfaction_level' in feature_columns 
 
             with st.form("Predict_value_form"):
@@ -1458,7 +1473,7 @@ def main():
             if predict_button:
                 input_df = pd.DataFrame([input_data])
                 with st.spinner('AI is analyzing...'):
-                    sleep(1)
+                    sleep(0.5)
                     input_df = input_df[feature_columns] 
                     raw_probas = pipeline.predict_proba(input_df)[0]
                     calibrated_stay = calibrate_probability(raw_probas[0], temperature=0.55)
@@ -1468,6 +1483,15 @@ def main():
                     st.session_state.prediction_result = prediction
                     st.session_state.input_df = input_df
                     st.session_state.prediction_probas = [calibrated_stay, calibrated_leave]
+                    
+                    # NEW: Add to history
+                    history_entry = {
+                        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        'input': input_data.copy(),
+                        'prediction': 'LEAVE' if prediction == 1 else 'STAY',
+                        'confidence': calibrated_leave if prediction == 1 else calibrated_stay
+                    }
+                    st.session_state.prediction_history.append(history_entry)
 
             if st.session_state.prediction_result is not None:
                 st.markdown("---")
@@ -1475,14 +1499,12 @@ def main():
                 stay_prob = st.session_state.prediction_probas[0]
                 leave_prob = st.session_state.prediction_probas[1]
                 
+                # NEW: Calculate confidence interval
+                ci_lower, ci_upper = calculate_confidence_interval(leave_prob, len(df))
+                confidence_margin = (ci_upper - ci_lower) / 2
+                
                 stay_percent = int(round(stay_prob * 100))
                 leave_percent = int(round(leave_prob * 100))
-                
-                # NEW: Calculate confidence interval (simplified)
-                confidence = abs(leave_prob - 0.5) * 2  # 0 = uncertain, 1 = very confident
-                if confidence > 0.7: confidence_text = "HIGH"
-                elif confidence > 0.3: confidence_text = "MEDIUM"
-                else: confidence_text = "LOW"
                 
                 if st.session_state.prediction_result == 1:
                     result_text = "LEAVE"
@@ -1502,10 +1524,7 @@ def main():
                     <div class="card-section card-section-first">
                         <div class="card-label">Employee is Likely to</div>
                         <div class="card-result {result_class}">{result_text}</div>
-                        <div style='margin-top:10px; font-size:0.8rem; color:#8b949e;'>Confidence: {confidence_text}</div>
-                        <div class='confidence-bar' style='width:80%;'>
-                            <div class='confidence-fill' style='width:{confidence*100}%; background-color:{"#17B794" if st.session_state.prediction_result==0 else "#EEB76B"};'></div>
-                        </div>
+                        <div style='color: #8b949e; font-size: 0.8rem; margin-top: 5px;'>±{confidence_margin*100:.0f}% confidence margin</div>
                     </div>
                     <div class="card-section">
                         <div class="card-label">Probability to Stay</div>
@@ -1520,26 +1539,23 @@ def main():
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # NEW: Model accuracy disclaimer
-                st.caption(f"*Prediction based on LightGBM model with {st.session_state.model_accuracy:.1%} historical accuracy. Individual predictions may vary.*")
+                # NEW: Confidence explanation
+                with st.expander("📊 Understanding the Confidence Level"):
+                    st.markdown(f"""
+                    **What does ±{confidence_margin*100:.0f}% mean?**
+                    
+                    - The AI is {leave_percent}% confident the employee will leave
+                    - However, the true probability could be between **{ci_lower*100:.0f}%** and **{ci_upper*100:.0f}**
+                    - This range is based on the sample size ({len(df)} employees) and prediction certainty
+                    
+                    **How to use this:**
+                    - If the lower bound (>30%) still indicates risk → Take preventive action
+                    - If the upper bound (<40%) is below threshold → Monitor but don't overreact
+                    """)
                 
                 if st.session_state.prediction_result == 1:
                     st.markdown("---"); st.markdown("### 💡 Recommended Actions")
                     for rec in get_retention_strategies(st.session_state.input_df): st.info(rec)
-                    
-                    # NEW: Add to action tracker option
-                    if st.button("📋 Add to Action Tracker", type="secondary"):
-                        action = {
-                            'id': len(st.session_state.action_items) + 1,
-                            'created': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                            'description': f"Review at-risk employee (Leave probability: {leave_percent}%)",
-                            'status': 'pending',
-                            'due_date': (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d'),
-                            'priority': 'high' if leave_percent > 70 else 'medium'
-                        }
-                        st.session_state.action_items.append(action)
-                        st.success("✅ Added to Action Tracker!")
-                    
                     st.markdown("---"); st.markdown("### 🔮 AI Retention Strategies (What-If Simulator)")
                     st.write("<p style='color: #9ca3af; margin-bottom: 15px;'>Here are 3 different ways to prevent this employee from leaving, ranked by feasibility.</p>", unsafe_allow_html=True)
                     if st.button("💡 Show Me How to Keep Them", type="primary", key="gen_cf"):
@@ -1563,50 +1579,85 @@ def main():
                                             if isinstance(orig_val, float):
                                                 if abs(orig_val - new_val) > 0.05:
                                                     col_lower = col.lower(); action_text = ""
-                                                    if 'satisfaction' in col_lower: action_text = f"🤝 <strong>Boost Engagement</strong>: Improve satisfaction score from <strong>{orig_val:.2f}</strong> to <strong>{new_val:.2f}</strong>."
+                                                    if 'satisfaction' in col_lower: action_text = f"🤝 <strong>Boost Engagement</strong>: Improve satisfaction from <strong>{orig_val:.2f}</strong> to <strong>{new_val:.2f}</strong>."
                                                     elif 'hours' in col_lower:
                                                         diff = orig_val - new_val
                                                         if diff > 0: action_text = f"⏰ <strong>Reduce Workload</strong>: Cut monthly hours by ~<strong>{abs(diff):.0f}</strong>."
-                                                        else: action_text = f"⏰ <strong>Increase Engagement</strong>: Adjust hours to ~<strong>{new_val:.0f}</strong>."
-                                                    elif 'project' in col_lower: action_text = f"📂 <strong>Rebalance Projects</strong>: Adjust project count to <strong>{int(new_val)}</strong>."
-                                                    elif 'evaluation' in col_lower: action_text = f"📊 <strong>Performance Coaching</strong>: Guide evaluation score to <strong>{new_val:.2f}</strong>."
-                                                    else: action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: Change from {orig_val:.2f} to {new_val:.2f}."
+                                                        else: action_text = f"⏰ <strong>Adjust Hours</strong>: Set to ~<strong>{new_val:.0f}</strong>."
+                                                    elif 'project' in col_lower: action_text = f"📂 <strong>Rebalance Projects</strong>: Adjust to <strong>{int(new_val)}</strong> projects."
+                                                    elif 'evaluation' in col_lower: action_text = f"📊 <strong>Coaching</strong>: Guide evaluation to <strong>{new_val:.2f}</strong>."
+                                                    else: action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: {orig_val:.2f} → {new_val:.2f}."
                                                     if action_text: changes.append(action_text)
                                             else:
                                                 if orig_val != new_val:
-                                                    if 'department' in col.lower(): has_high_effort = True; action_text = f"🏢 <strong>Department Transfer</strong>: Move from <strong>{orig_val}</strong> to <strong>{new_val}</strong>. <span style='color:#EEB76B;'>(High Effort)</span>"
-                                                    else: action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: Change from {orig_val} to {new_val}."
+                                                    if 'department' in col.lower(): has_high_effort = True; action_text = f"🏢 <strong>Transfer</strong>: Move to <strong>{new_val}</strong>. <span style='color:#EEB76B;'>(High Effort)</span>"
+                                                    else: action_text = f"• <strong>{col.replace('_', ' ').title()}</strong>: {orig_val} → {new_val}."
                                                     changes.append(action_text)
                                         if not changes: changes.append("• (AI suggests maintaining current status with minor supervision)")
                                         changes_str = "".join([f"<div class='action-item {'action-item-high-effort' if has_high_effort else ''}'>{c}</div>" for c in changes])
-                                        scenarios_html.append(f"<div class='custom-card' style='border-color: #17B794;'><h4 style='color: #17B794; margin-top:0;'>Strategy {i+1}</h4><p style='color: #c9d1d9; font-size: 0.9rem; line-height: 1.6;'>{changes_str}</p><div style='margin-top: 15px; border-top: 1px solid #30363d; padding-top: 10px;'><small style='color: #17B794;'><strong>Result:</strong> If implemented, the AI predicts the employee will <strong>STAY</strong>.</small></div></div>")
+                                        scenarios_html.append(f"<div class='custom-card' style='border-color: #17B794;'><h4 style='color: #17B794; margin-top:0;'>Strategy {i+1}</h4><p style='color: #c9d1d9; font-size: 0.9rem; line-height: 1.6;'>{changes_str}</p><div style='margin-top: 15px; border-top: 1px solid #30363d; padding-top: 10px;'><small style='color: #17B794;'><strong>Result:</strong> AI predicts employee will <strong>STAY</strong>.</small></div></div>")
                                     col_s1, col_s2, col_s3 = st.columns(3)
                                     cols_list = [col_s1, col_s2, col_s3]
                                     for i, html in enumerate(scenarios_html):
                                         with cols_list[i]: st.markdown(html, unsafe_allow_html=True)
                             except Exception as e: st.error(f"Error generating strategies: {e}")
         
-        # BATCH PREDICTION TAB
         with tab_batch:
             st.markdown("### 📦 Batch Prediction")
             st.write("Upload a CSV of multiple employees to get predictions instantly.")
             batch_file = st.file_uploader("Upload Employee CSV", type=["csv"], key="batch_uploader")
             if batch_file:
-                batch_df = pd.read_csv(batch_file)
-                req_cols = [c for c in feature_columns if c in batch_df.columns]
-                if len(req_cols) == len(feature_columns):
-                    probs = pipeline.predict_proba(batch_df[feature_columns])[:, 1]
-                    batch_df['Risk Score'] = calibrate_probability_array(probs)
-                    batch_df['Prediction'] = batch_df['Risk Score'].apply(lambda x: "LEAVE" if x > 0.5 else "STAY")
-                    batch_df['Confidence'] = batch_df['Risk Score'].apply(lambda x: "HIGH" if abs(x-0.5) > 0.3 else "MEDIUM" if abs(x-0.5) > 0.15 else "LOW")
-                    batch_df = batch_df.sort_values('Risk Score', ascending=False)
-                    st.dataframe(batch_df, use_container_width=True)
-                    csv = batch_df.to_csv(index=False).encode('utf-8')
-                    st.download_button("⬇️ Download Results", csv, "batch_predictions.csv", "text/csv")
-                else:
-                    st.error(f"Missing columns in uploaded file. Required: {feature_columns}")
+                try:
+                    batch_df = pd.read_csv(batch_file)
+                    req_cols = [c for c in feature_columns if c in batch_df.columns]
+                    missing_cols = [c for c in feature_columns if c not in batch_df.columns]
+                    
+                    if missing_cols:
+                        st.error(f"❌ Missing columns: {missing_cols}")
+                        st.info(f"Required columns: {feature_columns}")
+                    elif len(req_cols) == len(feature_columns):
+                        probs = pipeline.predict_proba(batch_df[feature_columns])[:, 1]
+                        batch_df['Risk Score'] = calibrate_probability_array(probs)
+                        batch_df['Risk Level'] = batch_df['Risk Score'].apply(lambda x: get_risk_label(x)[0])
+                        batch_df['Prediction'] = batch_df['Risk Score'].apply(lambda x: "LEAVE" if x > 0.5 else "STAY")
+                        batch_df = batch_df.sort_values('Risk Score', ascending=False)
+                        st.dataframe(batch_df, use_container_width=True)
+                        
+                        # Summary stats
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("Total Processed", len(batch_df))
+                        c2.metric("High Risk", len(batch_df[batch_df['Risk Level'].isin(['Critical', 'High'])]))
+                        c3.metric("Low Risk", len(batch_df[batch_df['Risk Level'] == 'Low']))
+                        
+                        csv = dataframe_to_csv_download(batch_df, "batch_predictions.csv")
+                        st.download_button("⬇️ Download Results", csv, "batch_predictions.csv", "text/csv")
+                    else:
+                        st.error(f"Column mismatch. Required: {feature_columns}")
+                except Exception as e:
+                    st.error(f"Error processing file: {e}")
+        
+        # NEW: Prediction History Tab
+        with tab_history:
+            st.markdown("### 📜 Prediction History")
+            st.write("View your recent individual predictions.")
+            
+            if st.session_state.prediction_history:
+                for i, entry in enumerate(reversed(st.session_state.prediction_history[-10:])):
+                    pred_color = "#FF4B4B" if entry['prediction'] == 'LEAVE' else "#17B794"
+                    st.markdown(f"""
+                    <div style='background: {pred_color}10; border-left: 3px solid {pred_color}; padding: 10px 15px; margin: 5px 0; border-radius: 0 8px 8px 0;'>
+                        <strong>{entry['prediction']}</strong> - {entry['timestamp']}
+                        <br><small style='color: #8b949e;'>Confidence: {entry['confidence']*100:.1f}%</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                if st.button("🗑️ Clear History"):
+                    st.session_state.prediction_history = []
+                    st.rerun()
+            else:
+                st.info("No predictions made yet. Go to the Individual Prediction tab to start.")
 
-    if page == "Why They Leave":
+    if page == "🔍 Why They Leave":
         st.header("🧠 Key Attrition Drivers")
         st.write("Understand the specific factors driving your team's attrition risk, explained simply.")
         st.write("---")
@@ -1640,153 +1691,37 @@ def main():
                 st.pyplot(fig1, bbox_inches='tight'); plt.close(fig1)
 
     # ====================================================================
-    # NEW PAGE: INDUSTRY BENCHMARKS
+    # REBUILT PAGE: BUDGET PLANNER
     # ====================================================================
-    if page == "Industry Benchmarks":
-        st.header("📊 Industry Benchmarks")
-        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Compare your attrition metrics against industry standards to contextualize your performance.</p>", unsafe_allow_html=True)
-        
-        # Industry selector
-        selected_industry = st.selectbox("Select Your Industry", list(INDUSTRY_BENCHMARKS.keys()))
-        st.session_state.industry_selected = selected_industry
-        
-        # Get current metrics
-        current_attrition = (df['left'].sum() / len(df)) * 100
-        benchmark = INDUSTRY_BENCHMARKS[selected_industry]
-        
-        # Comparison cards
-        col_b1, col_b2, col_b3 = st.columns(3)
-        
-        # Attrition comparison
-        diff_attrition = current_attrition - benchmark['avg_attrition']
-        if diff_attrition > 0:
-            attrition_status = f"⚠️ {diff_attrition:.1f}% WORSE"
-            attrition_color = "#FF4B4B"
-        else:
-            attrition_status = f"✅ {abs(diff_attrition):.1f}% BETTER"
-            attrition_color = "#17B794"
-        
-        with col_b1:
-            st.markdown(f"""
-            <div class="benchmark-card">
-                <div class="benchmark-label">Your Attrition Rate</div>
-                <div class="benchmark-value" style="color: {attrition_color};">{current_attrition:.1f}%</div>
-                <div class="benchmark-comparison">
-                    <div style="color: #8b949e;">Industry Avg: {benchmark['avg_attrition']}%</div>
-                    <div style="color: {attrition_color}; font-weight: 600; margin-top: 5px;">{attrition_status}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col_b2:
-            st.markdown(f"""
-            <div class="benchmark-card">
-                <div class="benchmark-label">Industry Cost Per Hire</div>
-                <div class="benchmark-value" style="color: #EEB76B;">{benchmark['cost_per_hire_pct']*100:.0f}%</div>
-                <div class="benchmark-comparison">
-                    <div style="color: #8b949e;">Of annual salary</div>
-                    <div style="color: #c9d1d9; margin-top: 5px;">Time to fill: {benchmark['time_to_fill_days']} days</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col_b3:
-            # Calculate estimated cost impact
-            avg_salary = 500000  # Default estimate
-            if 'salary' in df.columns:
-                salary_map = {'low': 400000, 'medium': 600000, 'high': 900000}
-                avg_salary = df['salary'].map(salary_map).mean()
-            
-            employees_left = int(df['left'].sum())
-            estimated_cost = employees_left * avg_salary * benchmark['cost_per_hire_pct']
-            
-            st.markdown(f"""
-            <div class="benchmark-card">
-                <div class="benchmark-label">Your Replacement Cost</div>
-                <div class="benchmark-value" style="color: #FF4B4B;">₹{(estimated_cost/10000000):.2f}Cr</div>
-                <div class="benchmark-comparison">
-                    <div style="color: #8b949e;">{employees_left} employees replaced</div>
-                    <div style="color: #c9d1d9; margin-top: 5px;">Avg salary: ₹{(avg_salary/100000):.1f}L</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # All industries comparison chart
-        st.markdown("---")
-        st.markdown("### 📈 All Industries Comparison")
-        
-        benchmark_df = pd.DataFrame([
-            {'Industry': k, 'Attrition Rate': v['avg_attrition'], 'Type': 'Industry Average'}
-            for k, v in INDUSTRY_BENCHMARKS.items()
-        ])
-        benchmark_df = pd.concat([
-            benchmark_df,
-            pd.DataFrame([{'Industry': 'YOUR COMPANY', 'Attrition Rate': current_attrition, 'Type': 'Your Company'}])
-        ])
-        
-        fig_benchmark = px.bar(
-            benchmark_df,
-            x='Industry',
-            y='Attrition Rate',
-            color='Type',
-            color_discrete_map={'Industry Average': '#30363d', 'Your Company': '#17B794'},
-            title='Attrition Rate: Your Company vs Industry Benchmarks',
-            template='plotly_dark',
-            height=450
-        )
-        fig_benchmark.update_layout(showlegend=True)
-        custome_layout(fig_benchmark, title_size=22, showlegend=True)
-        st.plotly_chart(fig_benchmark, use_container_width=True)
-        
-        # Contextual advice
-        st.markdown("---")
-        if current_attrition > benchmark['avg_attrition'] + 5:
-            st.error(f"""
-            **🚨 Action Required:** Your attrition rate ({current_attrition:.1f}%) is significantly higher than the {selected_industry} industry average ({benchmark['avg_attrition']}%).
-            
-            **Immediate Recommendations:**
-            1. Conduct stay interviews for top 20% of workforce
-            2. Review compensation against market rates
-            3. Analyze manager effectiveness (bad managers = high turnover)
-            """)
-        elif current_attrition > benchmark['avg_attrition']:
-            st.warning(f"""
-            **⚠️ Monitor:** Your attrition rate ({current_attrition:.1f}%) is slightly above the {selected_industry} industry average ({benchmark['avg_attrition']}%).
-            
-            **Recommendations:**
-            1. Identify which departments are driving the increase
-            2. Implement pulse surveys for early detection
-            """)
-        else:
-            st.success(f"""
-            **✅ Well Done:** Your attrition rate ({current_attrition:.1f}%) is below the {selected_industry} industry average ({benchmark['avg_attrition']}%).
-            
-            **Maintenance Recommendations:**
-            1. Continue current retention strategies
-            2. Focus on keeping top performers engaged
-            3. Prepare for industry-wide challenges
-            """)
-
-    # ====================================================================
-    # PAGE: BUDGET PLANNER
-    # ====================================================================
-    if page == "Budget Planner":
+    if page == "💰 Budget Planner":
         st.markdown("<h1 style='margin-bottom: 5px;'>💰 Budget Planner</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af; font-size: 1.1rem; margin-bottom: 30px;'>A two-step financial playbook to secure executive budget approval and optimize your spend.</p>", unsafe_allow_html=True)
         
+        # Get salary settings
+        settings = st.session_state.app_settings
+        salary_map = {
+            'low': settings['salary_low'],
+            'medium': settings['salary_medium'],
+            'high': settings['salary_high']
+        }
+        currency = settings['currency']
+        
         # --- PHASE 1: TRUE COST OF TURNOVER ---
-        st.markdown("""
+        st.markdown(f"""
         <div class="custom-card" style="border-left: 5px solid #FF4B4B; background: linear-gradient(to right, #2d1515 0%, #1c2128 100%);">
             <h3 style="color: #FF4B4B; margin-top: 0;">💸 Phase 1: The Burn Rate</h3>
             <p style="color: #e6edf3; font-size: 1rem;"><strong>The Question:</strong> "How much money are we actually losing, and where?"</p>
-            <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0;'>CFOs speak in money. Translating "23% attrition" into hard numbers immediately gets budget approval.</p>
+            <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0;">CFOs speak in money. Translating attrition into hard numbers gets budget approval.</p>
         </div>
         """, unsafe_allow_html=True)
         
         if 'Department' in df.columns:
-            salary_map = {'low': 400000, 'medium': 600000, 'high': 900000}
             df_cost = df.copy()
-            df_cost['annual_salary'] = df_cost['salary'].map(salary_map) if 'salary' in df_cost.columns else 500000
+            if 'salary' in df_cost.columns:
+                df_cost['annual_salary'] = df_cost['salary'].map(salary_map)
+            else:
+                df_cost['annual_salary'] = (settings['salary_low'] + settings['salary_high']) / 2
+            
             df_left = df_cost[df_cost['left'] == 1].copy()
             
             if len(df_left) > 0:
@@ -1807,20 +1742,22 @@ def main():
                 avg_exit_cost = grand_total / total_left
                 
                 c_shock1, c_shock2, c_shock3 = st.columns(3)
-                c_shock1.metric("Total Money Lost to Attrition", f"₹{grand_total/10000000:.2f} Cr", delta=f"{total_left} Employees Left", delta_color="inverse")
-                c_shock2.metric("Avg. Cost Per Exit", f"₹{avg_exit_cost:,.0f}", delta="Industry Standard Math")
-                c_shock3.metric("Most Expensive Dept.", dept_costs.iloc[0]['Department'], delta=f"₹{dept_costs.iloc[0]['total_cost']/10000000:.2f} Cr Lost", delta_color="inverse")
+                c_shock1.metric("Total Money Lost to Attrition", format_currency(grand_total), delta=f"{total_left} Employees Left", delta_color="inverse")
+                c_shock2.metric("Avg. Cost Per Exit", format_currency(avg_exit_cost), delta="Industry Standard Math")
+                c_shock3.metric("Most Expensive Dept.", dept_costs.iloc[0]['Department'], delta=f"{format_currency(dept_costs.iloc[0]['total_cost'])} Lost", delta_color="inverse")
                 
                 with st.expander("📐 How we calculate this (Click to verify)"):
-                    st.markdown("""
+                    st.markdown(f"""
                     We use the **Standard HR Industry Formula** for turnover cost:\n
                     > `Cost = 50% of Annual Salary × (1 + Years of Tenure × 10%)`
                     
                     *   **Base Replacement Cost:** 50% of salary (covers recruiting, onboarding, admin).
-                    *   **Experience Penalty:** +10% for every year of experience the employee had (captures institutional knowledge loss).
-                    *   **Cap:** The multiplier is capped at 2.0x (200% of salary) for very senior employees.
+                    *   **Experience Penalty:** +10% for every year of experience (institutional knowledge loss).
+                    *   **Cap:** Multiplier capped at 2.0x for senior employees.
                     
-                    *Example:* A 5-year employee earning ₹6L costs `0.5 × 6L × 1.5 = ₹4.5L` to replace.
+                    *Salary Bands Used:* Low: {currency}{salary_map['low']:,} | Medium: {currency}{salary_map['medium']:,} | High: {currency}{salary_map['high']:,}
+                    
+                    *Example:* A 5-year employee earning {currency}{salary_map['medium']:,} costs `0.5 × {salary_map['medium']:,} × 1.5 = {currency}{int(salary_map['medium']*0.75):,}` to replace.
                     """)
                 
                 fig_cost = px.bar(
@@ -1834,8 +1771,7 @@ def main():
                     height=450
                 )
                 fig_cost.update_layout(
-                    yaxis_title="Total Loss (₹)",
-                    yaxis=dict(tickformat=',.0f'),
+                    yaxis_title=f"Total Loss ({currency})",
                     xaxis={'categoryorder': 'total descending'},
                     xaxis_title="",
                     showlegend=False
@@ -1844,7 +1780,7 @@ def main():
                 st.plotly_chart(fig_cost, use_container_width=True)
                 
                 top_dept = dept_costs.iloc[0]
-                st.markdown(f"""<div class="custom-card" style="border-left: 4px solid #FF4B4B;"><h4 style="color: #FF4B4B; margin-top: 0;">Executive Talking Point</h4><p style="color: #e6edf3; font-size: 1.1rem;"><strong>{top_dept['Department']} attrition cost us ₹{top_dept['total_cost']/10000000:.2f} Crores last year.</strong> That's the price of losing {top_dept['employees_left']} employees and their accumulated experience.</p></div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class="custom-card" style="border-left: 4px solid #FF4B4B;"><h4 style="color: #FF4B4B; margin-top: 0;">Executive Talking Point</h4><p style="color: #e6edf3; font-size: 1.1rem;"><strong>{top_dept['Department']} attrition cost us {format_currency(top_dept['total_cost'])} last year.</strong> That's the price of losing {top_dept['employees_left']} employees and their accumulated experience.</p></div>""", unsafe_allow_html=True)
             else:
                 st.info("No historical attrition data found in this dataset.")
         else:
@@ -1857,12 +1793,12 @@ def main():
         <div class="custom-card" style="border-left: 5px solid #17B794; background: linear-gradient(to right, #0d2818 0%, #1c2128 100%);">
             <h3 style="color: #17B794; margin-top: 0;">🛡️ Phase 2: The ROI Optimizer</h3>
             <p style="color: #e6edf3; font-size: 1rem;"><strong>The Question:</strong> "Who should we save with our limited budget?"</p>
-            <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0;'>We use Mathematical Optimization (MILP) to find the exact combination of employees that yields maximum ROI. It's cheaper to give a 10% raise than to replace them.</p>
+            <p style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0;">We use Mathematical Optimization (MILP) to find the exact combination of employees that yields maximum ROI.</p>
         </div>
         """, unsafe_allow_html=True)
         
         col1, col2 = st.columns([2, 1])
-        with col1: budget = st.number_input("Enter Total Retention Budget (₹)", min_value=100000, max_value=10000000, value=1000000, step=50000)
+        with col1: budget = st.number_input(f"Enter Total Retention Budget ({currency})", min_value=100000, max_value=10000000, value=1000000, step=50000)
         with col2: st.write("<br>", unsafe_allow_html=True); optimize_btn = st.button("🚀 Run Optimizer", type="primary")
         
         if optimize_btn:
@@ -1880,7 +1816,7 @@ def main():
                     if 'salary' in df.columns:
                         high_risk_df['salary_val'] = high_risk_df['salary'].map(salary_map)
                     else:
-                        high_risk_df['salary_val'] = 500000 
+                        high_risk_df['salary_val'] = (settings['salary_low'] + settings['salary_high']) / 2
                     
                     high_risk_df['cost_to_retain'] = high_risk_df['salary_val'] * 0.10
                     high_risk_df['expected_loss'] = high_risk_df['risk'] * (high_risk_df['salary_val'] * 0.50)
@@ -1912,22 +1848,9 @@ def main():
                             st.success("✅ **Optimization Complete.** Here is your action plan:")
                             
                             m1, m2, m3 = st.columns(3)
-                            m1.metric("Investment Needed", f"₹{total_investment:,.0f}", delta=f"{(total_investment/budget)*100:.1f}% of Budget")
-                            m2.metric("Projected Savings", f"₹{total_savings:,.0f}", delta="ROI Positive")
+                            m1.metric("Investment Needed", format_currency(total_investment), delta=f"{(total_investment/budget)*100:.1f}% of Budget")
+                            m2.metric("Projected Savings", format_currency(total_savings), delta="ROI Positive")
                             m3.metric("Lives Saved", f"{len(selected_employees)} People", delta="Prevented Exit")
-                            
-                            # NEW: Add to action tracker
-                            if st.button("📋 Add to Action Tracker", type="secondary", key="add_budget_action"):
-                                action = {
-                                    'id': len(st.session_state.action_items) + 1,
-                                    'created': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                                    'description': f"Execute retention plan for {len(selected_employees)} employees (Budget: ₹{total_investment:,.0f})",
-                                    'status': 'pending',
-                                    'due_date': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
-                                    'priority': 'high'
-                                }
-                                st.session_state.action_items.append(action)
-                                st.success("✅ Added to Action Tracker!")
                             
                             st.markdown("### 📋 Target List")
                             st.caption("These employees have been mathematically proven to be cheaper to retain than to replace.")
@@ -1936,217 +1859,31 @@ def main():
                             display_df.rename(columns={
                                 'salary': 'Salary Tier', 
                                 'risk': 'AI Risk %', 
-                                'cost_to_retain': 'Cost to Retain (₹)', 
-                                'net_savings': 'Net Savings (₹)'
+                                'cost_to_retain': f'Cost to Retain ({currency})', 
+                                'net_savings': f'Net Savings ({currency})'
                             }, inplace=True)
                             display_df['AI Risk %'] = (display_df['AI Risk %'] * 100).round(1).astype(str) + "%"
-                            display_df['Cost to Retain (₹)'] = display_df['Cost to Retain (₹)'].apply(lambda x: f"₹{x:,.0f}")
-                            display_df['Net Savings (₹)'] = display_df['Net Savings (₹)'].apply(lambda x: f"₹{x:,.0f}")
+                            display_df[f'Cost to Retain ({currency})'] = display_df[f'Cost to Retain ({currency})'].apply(lambda x: format_currency(x))
+                            display_df[f'Net Savings ({currency})'] = display_df[f'Net Savings ({currency})'].apply(lambda x: format_currency(x))
                             st.dataframe(display_df, use_container_width=True)
+                            
+                            # Download option
+                            csv = dataframe_to_csv_download(display_df, "retention_targets.csv")
+                            st.download_button("⬇️ Download Target List", csv, "retention_targets.csv", "text/csv")
                         else:
                             st.error("❌ Optimization failed. Budget may be too low to save anyone.")
-
-    # ====================================================================
-    # NEW PAGE: STAY INTERVIEWS
-    # ====================================================================
-    if page == "Stay Interviews":
-        st.header("💬 Stay Interview Templates")
-        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Proactive retention starts with understanding why people stay. Use these research-backed questions for your stay interviews.</p>", unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div class="custom-card" style="border-left: 5px solid #17B794;">
-            <h4 style="color: #17B794; margin-top: 0;">🎯 What is a Stay Interview?</h4>
-            <p style='color: #c9d1d9;'>A stay interview is a structured conversation with current employees to understand what keeps them at the company and what might cause them to leave. Unlike exit interviews, stay interviews help you <strong>prevent</strong> attrition before it happens.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Best practices
-        with st.expander("📋 Best Practices for Stay Interviews", expanded=False):
-            st.markdown("""
-            **Do's:**
-            - ✅ Conduct with top performers and critical roles first
-            - ✅ Have the direct manager conduct the interview (not HR)
-            - ✅ Keep it confidential - share themes, not individual responses
-            - ✅ Follow up within 2 weeks on any commitments made
-            - ✅ Make it a regular practice (quarterly or bi-annually)
-            
-            **Don'ts:**
-            - ❌ Don't combine with performance reviews
-            - ❌ Don't ask leading questions ("You're happy here, right?")
-            - ❌ Don't make promises you can't keep
-            - ❌ Don't share responses with other managers
-            - ❌ Don't skip follow-up actions
-            """)
-        
-        st.markdown("---")
-        st.markdown("### 📝 Question Bank")
-        
-        # Category filter
-        categories = ["All", "Engagement", "Growth", "Management", "Compensation", "Culture"]
-        selected_category = st.selectbox("Filter by Category", categories)
-        
-        question_categories = {
-            "Engagement": [0, 3, 5],
-            "Growth": [1, 6],
-            "Management": [5, 9],
-            "Compensation": [3],
-            "Culture": [8, 9]
-        }
-        
-        for i, q in enumerate(STAY_INTERVIEW_QUESTIONS):
-            if selected_category == "All" or i in question_categories.get(selected_category, []):
-                st.markdown(f"""
-                <div class="interview-question">
-                    <div class="question-text">{i+1}. {q['question']}</div>
-                    <div class="question-purpose">💡 Purpose: {q['purpose']}</div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        # NEW: Generate stay interview guide
-        st.markdown("---")
-        st.markdown("### 🤖 AI-Generated Interview Guide")
-        if st.button("✍️ Generate Custom Stay Interview Guide", type="primary"):
-            with st.spinner("Generating personalized guide..."):
-                try:
-                    api_key = st.secrets.get("GROQ_API_KEY", None)
-                    if api_key:
-                        llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.6)
-                        
-                        # Get context from data
-                        if 'satisfaction_level' in df.columns:
-                            avg_sat = df['satisfaction_level'].mean()
-                            top_issue = "low satisfaction" if avg_sat < 0.5 else "work-life balance" if df['average_montly_hours'].mean() > 200 else "career growth"
-                        else:
-                            top_issue = "general engagement"
-                        
-                        template = """You are an HR expert creating a stay interview guide.
-                        
-                        **Context:** Our company has {attrition_rate:.1f}% attrition rate. Main issue seems to be {top_issue}.
-                        
-                        **Task:** Create a 15-minute stay interview guide with:
-                        1. Opening script (2 minutes)
-                        2. 5 key questions with follow-up probes
-                        3. Closing script (2 minutes)
-                        
-                        Keep it conversational and natural. Avoid corporate jargon.
-                        """
-                        prompt = PromptTemplate.from_template(template)
-                        chain = prompt | llm | StrOutputParser()
-                        response = chain.invoke({
-                            "attrition_rate": (df['left'].sum() / len(df)) * 100,
-                            "top_issue": top_issue
-                        })
-                        st.markdown(f"<div class='llm-response'>{response}</div>", unsafe_allow_html=True)
-                    else:
-                        st.warning("🔑 API Key missing. Use the question bank above instead.")
-                except Exception as e:
-                    st.error(f"Error: {e}")
-
-    # ====================================================================
-    # NEW PAGE: ACTION TRACKER
-    # ====================================================================
-    if page == "Action Tracker":
-        st.header("📋 Action Tracker")
-        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Track your retention action items and ensure follow-through. Recommendations without action are just noise.</p>", unsafe_allow_html=True)
-        
-        # Summary metrics
-        col_a1, col_a2, col_a3 = st.columns(3)
-        pending_count = len([a for a in st.session_state.action_items if a['status'] == 'pending'])
-        completed_count = len([a for a in st.session_state.action_items if a['status'] == 'completed'])
-        overdue_count = len([a for a in st.session_state.action_items if a['status'] == 'pending' and a['due_date'] < datetime.now().strftime('%Y-%m-%d')])
-        
-        col_a1.metric("Pending Actions", pending_count, delta="Need attention")
-        col_a2.metric("Completed", completed_count, delta="Done!")
-        col_a3.metric("Overdue", overdue_count, delta_color="inverse" if overdue_count > 0 else "normal")
-        
-        # Add new action form
-        with st.expander("➕ Add New Action Item", expanded=False):
-            with st.form("add_action_form"):
-                new_action_desc = st.text_area("Action Description", placeholder="e.g., Schedule stay interview with Rahul from Sales")
-                col_new1, col_new2 = st.columns(2)
-                with col_new1:
-                    new_due_date = st.date_input("Due Date", value=datetime.now() + timedelta(days=7))
-                with col_new2:
-                    new_priority = st.selectbox("Priority", ["high", "medium", "low"])
-                
-                if st.form_submit_button("Add Action"):
-                    if new_action_desc:
-                        action = {
-                            'id': len(st.session_state.action_items) + 1,
-                            'created': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                            'description': new_action_desc,
-                            'status': 'pending',
-                            'due_date': new_due_date.strftime('%Y-%m-%d'),
-                            'priority': new_priority
-                        }
-                        st.session_state.action_items.append(action)
-                        st.success("✅ Action added!")
-                        st.rerun()
-                    else:
-                        st.warning("Please enter a description")
-        
-        # Display actions
-        st.markdown("---")
-        if len(st.session_state.action_items) == 0:
-            st.info("No action items yet. Add actions from predictions or use the form above.")
-        else:
-            # Filter options
-            filter_status = st.selectbox("Filter by Status", ["All", "Pending", "Completed", "Overdue"])
-            
-            filtered_actions = st.session_state.action_items
-            if filter_status == "Pending":
-                filtered_actions = [a for a in filtered_actions if a['status'] == 'pending']
-            elif filter_status == "Completed":
-                filtered_actions = [a for a in filtered_actions if a['status'] == 'completed']
-            elif filter_status == "Overdue":
-                filtered_actions = [a for a in filtered_actions if a['status'] == 'pending' and a['due_date'] < datetime.now().strftime('%Y-%m-%d')]
-            
-            for action in filtered_actions:
-                is_overdue = action['status'] == 'pending' and action['due_date'] < datetime.now().strftime('%Y-%m-%d')
-                status_class = 'overdue' if is_overdue else action['status']
-                
-                priority_badge = f'<span class="status-pill status-{"high" if action["priority"]=="high" else "medium" if action["priority"]=="medium" else "low"}">{action["priority"].upper()}</span>'
-                
-                st.markdown(f"""
-                <div class="action-tracker-item {status_class}">
-                    <div>
-                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:5px;">
-                            {priority_badge}
-                            <span style="color:#e6edf3; font-weight:500;">{action['description']}</span>
-                        </div>
-                        <div style="color:#8b949e; font-size:0.8rem;">
-                            Created: {action['created']} | Due: {action['due_date']}
-                            {f" | ⚠️ OVERDUE" if is_overdue else ""}
-                        </div>
-                    </div>
-                    <div style="display:flex; gap:8px;">
-                        {'<button onclick="this.parentElement.parentElement.className=\'action-tracker-item completed\'" style="padding:6px 12px; border-radius:6px; background:#17B79420; color:#17B794; border:1px solid #17B79440; cursor:pointer;">✓ Done</button>' if action['status'] == 'pending' else ''}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        # Bulk actions
-        if len(st.session_state.action_items) > 0:
-            st.markdown("---")
-            col_bulk1, col_bulk2 = st.columns(2)
-            with col_bulk1:
-                if st.button("✅ Mark All Pending as Complete", type="secondary"):
-                    for a in st.session_state.action_items:
-                        if a['status'] == 'pending':
-                            a['status'] = 'completed'
-                    st.success("All marked complete!")
-                    st.rerun()
-            with col_bulk2:
-                if st.button("🗑️ Clear Completed", type="secondary"):
-                    st.session_state.action_items = [a for a in st.session_state.action_items if a['status'] != 'completed']
-                    st.success("Cleared completed items!")
-                    st.rerun()
-
-    if page == "AI Assistant":
+                            
+    if page == "🤖 AI Assistant":
         st.header("🤖 AI Assistant")
-        st.markdown("<p style='color: #9ca3af;'>Tools to ensure reliability and simplify communication.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af;'>Tools to simplify HR communication.</p>", unsafe_allow_html=True)
         st.markdown("### ✍️ Draft Retention Communication")
         st.write("Select a scenario, and we'll draft a message for you.")
+        
+        # Check API status
+        llm, api_error = get_groq_llm()
+        if api_error == "API_KEY_MISSING":
+            st.info("💡 To use AI features, configure your Groq API key in ⚙️ Settings → 🔑 API Keys")
+        
         with st.form("llm_form"):
             c1, c2 = st.columns(2)
             with c1:
@@ -2156,11 +1893,11 @@ def main():
             with c2:
                 situation_input = st.selectbox("What is the situation?", ["Overworked & Burned out", "Seeking Higher Salary", "Low Morale / Unhappy", "Lack of Growth Opportunities"])
                 solution_input = st.selectbox("Proposed Solution", ["Offer Flexible Hours", "Discuss Salary Adjustment", "Offer Promotion/Role Change", "Organize 1-on-1 Wellness Session"])
-                cost_input = st.text_input("Estimated Annual Cost (Optional)", value="₹50,000")
+                cost_input = st.text_input("Estimated Annual Cost (Optional)", value=format_currency(50000))
             generate_btn = st.form_submit_button("🚀 Generate Email Draft")
             if generate_btn: run_groq_consultant(emp_name, emp_dept, situation_input, solution_input, cost_input)
 
-    if page == "AI Research Lab":
+    if page == "🧪 AI Research Lab":
         st.header("🧪 AI Research Lab")
         st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Advanced modules for Strategy, Disruption, and Recruitment.</p>", unsafe_allow_html=True)
         tab1, tab2, tab3 = st.tabs(["📊 Model Benchmarking", "🔬 Departmental Strategy Deep Dive", "🛡️ AI Disruption Defense"])
@@ -2186,7 +1923,7 @@ def main():
             st.subheader("🔬 Departmental Strategy Deep Dive")
             if 'Department' not in df.columns: st.warning("Department column not found in this dataset. Cannot run deep dive.")
             else:
-                st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Don't just guess why a team is struggling. Use AI to uncover the <strong>specific reasons</strong> why employees are leaving a particular department and get tailored strategies.</p>", unsafe_allow_html=True)
+                st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Use AI to uncover the <strong>specific reasons</strong> why employees are leaving a particular department.</p>", unsafe_allow_html=True)
                 selected_dept_name = st.selectbox("Select Department to Analyze", options=sorted(df['Department'].unique()))
                 if st.button("Generate Department Strategy", type="primary"):
                     with st.spinner("Analyzing departmental dynamics..."):
@@ -2208,10 +1945,6 @@ def main():
                             
                             if not target_col:
                                 st.error(f"Could not find data for {selected_dept_name} in the model features.")
-                                with st.expander("🔧 Debug Info"):
-                                    st.write("**Department searched for:**", selected_dept_name)
-                                    st.write("**Normalized search term:**", dept_normalized)
-                                    st.write("**Available columns:**", X_proc_df.columns.tolist())
                             else:
                                 dept_mask = X_proc_df[target_col] == 1
                                 if dept_mask.sum() == 0: st.warning(f"Not enough data to analyze {selected_dept_name} specifically.")
@@ -2225,33 +1958,34 @@ def main():
                                     importance_df.sort_values('Impact_Score', ascending=False, inplace=True); top_3_drivers = importance_df.head(3)
                                     chart_df = importance_df.head(5).iloc[::-1] 
                                     fig = px.bar(chart_df, x='Impact_Score', y='Feature', orientation='h', title=f"What is driving attrition in {selected_dept_name}?", template="plotly_dark", color_discrete_sequence=['#17B794'])
-                                    fig.update_layout(xaxis_title="Relative Impact (Higher = More Important)", yaxis_title="", height=400, margin=dict(l=0, r=0, t=40, b=0))
+                                    fig.update_layout(xaxis_title="Relative Impact", yaxis_title="", height=400, margin=dict(l=0, r=0, t=40, b=0))
                                     st.plotly_chart(fig, use_container_width=True)
-                                    st.markdown("### 💡 Recommended Retention Strategy"); st.write(f"Based on the AI analysis for the <strong>{selected_dept_name}</strong> team:", unsafe_allow_html=True)
+                                    st.markdown("### 💡 Recommended Retention Strategy")
                                     def get_driver_advice(feature_raw):
-                                        feature_clean = feature_raw.replace('_', ' ').title()
-                                        if 'Satisfaction' in feature_raw: return "Improve Employee Engagement", "The AI detects low morale as a primary driver. Initiate 'Stay Interviews', conduct anonymous pulse surveys, and review manager-employee relationships.", "🗣️"
-                                        elif 'Hour' in feature_raw or 'Time' in feature_raw: return "Address Workload & Burnout", "Overwork is the leading cause. Review project allocation, consider hiring support staff, and enforce 'Right to Disconnect' policies.", "⏰"
-                                        elif 'Project' in feature_raw: return "Optimize Work Distribution", "Employees are either bored or overwhelmed. Rebalance project assignments to ensure the 'Goldilocks' zone of productivity.", "📂"
-                                        elif 'Evaluation' in feature_raw: return "Clarify Performance Expectations", "Unclear goals are causing stress. Implement clearer KPIs and more frequent, constructive feedback loops.", "📊"
-                                        elif 'Salary' in feature_raw: return "Review Compensation Competitiveness", "Pay is a major factor. Conduct a market salary analysis for this specific department and adjust bands if necessary.", "💰"
-                                        elif 'Tenure' in feature_raw or 'Spend' in feature_raw: return "Focus on Career Growth", "Long-tenured employees feel stagnant. Create clear internal promotion pathways or rotation programs.", "📈"
-                                        else: return f"Monitor {feature_clean}", f"AI identified {feature_clean} as a key differentiator. Investigate department-specific policies related to this metric.", "🔍"
+                                        if 'Satisfaction' in feature_raw: return "Improve Engagement", "Conduct 'Stay Interviews' and pulse surveys.", "🗣️"
+                                        elif 'Hour' in feature_raw or 'Time' in feature_raw: return "Address Burnout", "Review project allocation and enforce 'Right to Disconnect'.", "⏰"
+                                        elif 'Project' in feature_raw: return "Optimize Work", "Rebalance assignments to the 'Goldilocks' zone.", "📂"
+                                        elif 'Evaluation' in feature_raw: return "Clarify Expectations", "Implement clearer KPIs and feedback loops.", "📊"
+                                        elif 'Salary' in feature_raw: return "Review Compensation", "Conduct market salary analysis.", "💰"
+                                        else: return f"Monitor {feature_raw}", "Investigate department-specific policies.", "🔍"
                                     c1, c2, c3 = st.columns(3); cols = [c1, c2, c3]
                                     for index, col in enumerate(cols):
                                         if index < len(top_3_drivers):
-                                            driver_row = top_3_drivers.iloc[index]; feature_name = driver_row['Feature']; impact_score = driver_row['Impact_Score']
+                                            driver_row = top_3_drivers.iloc[index]; feature_name = driver_row['Feature']
                                             icon, title, advice = get_driver_advice(feature_name)
-                                            card_html = f"<div class='custom-card' style='border-top: 4px solid #17B794;'><div style='display: flex; align-items: center; margin-bottom: 10px;'><span style='font-size: 1.5rem; margin-right: 10px;'>{icon}</span><h4 style='margin: 0; color: #fff;'>{title}</h4></div><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{advice}</p><small style='color: #8b949e;'>Driver: {feature_name.replace('_', ' ').title()}</small></div></div>"
+                                            card_html = f"<div class='custom-card' style='border-top: 4px solid #17B794;'><div style='display: flex; align-items: center; margin-bottom: 10px;'><span style='font-size: 1.5rem; margin-right: 10px;'>{icon}</span><h4 style='margin: 0; color: #fff;'>{title}</h4></div><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{advice}</p><small style='color: #8b949e;'>Driver: {feature_name.replace('_', ' ').title()}</small></div>"
                                             with col: st.markdown(card_html, unsafe_allow_html=True)
 
-        # AI DISRUPTION DEFENSE
         with tab3:
             st.subheader("🛡️ AI Disruption Defense")
             st.caption("Prove to leadership that reskilling is cheaper than mass layoffs.")
             st.error("**The Fear:** CEO asks, 'Can we just replace half the team with AI tools?'")
             st.success("**The Reality:** AI replaces *tasks*, not jobs. And layoffs cost way more than you think.")
             st.write("")
+            
+            settings = st.session_state.app_settings
+            avg_salary_default = (settings['salary_low'] + settings['salary_high']) / 2
+            currency = settings['currency']
             
             if 'Department' in df.columns and 'satisfaction_level' in df.columns:
                 st.markdown("### Step 1: Department Vulnerability Assessment")
@@ -2265,89 +1999,116 @@ def main():
                     dept_vuln.append({'Department': dept, 'Vulnerability Score': round(vuln_score), 'Employees': len(dept_data)})
                 vuln_df = pd.DataFrame(dept_vuln).sort_values('Vulnerability Score', ascending=False)
                 fig_vuln = px.bar(vuln_df, x='Vulnerability Score', y='Department', orientation='h', title="Which departments have roles most easily replaced by AI?", color='Vulnerability Score', color_continuous_scale=['#17B794', '#EEB76B'], template="plotly_dark", height=400)
-                fig_vuln.update_layout(xaxis_title="0 = Safe (Complex Work) | 100 = At Risk (Repetitive Work)", yaxis_title="", margin=dict(l=0, r=0, t=40, b=0))
+                fig_vuln.update_layout(xaxis_title="0 = Safe | 100 = At Risk", yaxis_title="", margin=dict(l=0, r=0, t=40, b=0))
                 st.plotly_chart(fig_vuln, use_container_width=True)
-                st.info("**How to read this:** A score of 70+ means the department likely has many repetitive tasks. A score under 30 means the work is too complex for current AI.")
 
             st.markdown("---")
             st.markdown("""
             <div class="custom-card" style="border-left: 5px solid #9ca3ca; background: linear-gradient(to right, #151d28 0%, #1c2128 100%);">
                 <h4 style="color: #9ca3ca; margin-top: 0;">🧠 The 'Proof of Work' Defense Strategy</h4>
-                <p style="color: #e6edf3; font-size: 1rem; font-weight: 600; margin-bottom: 10px;">What to say when the CEO asks: "Can we just use AI to cut headcount?"</p>
-                <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.6; margin-bottom: 10px;">
-                "We shouldn't try to compete with AI on speed; we must compete on strategy. AI can write code in 10 seconds, but it takes a human 3 weeks to understand the business context, manage stakeholder politics, and ensure compliance. If we lay off 200 people to save ₹12 Cr, we lose their domain expertise. If we give 50 people AI tools, we increase their capacity by 30%, allowing us to <strong>absorb the workload of the 200 people who left last year</strong> without losing institutional knowledge."
+                <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.6;">
+                "AI can write code in 10 seconds, but it takes a human 3 weeks to understand the business context. If we lay off 200 people to save costs, we lose their domain expertise. If we give 50 people AI tools, we increase their capacity by 30%, allowing us to <strong>absorb the workload of the 200 people who left last year</strong> without losing institutional knowledge."
                 </p>
                 <p style="color: #8b949e; font-size: 0.85rem; margin-top: 10px; margin-bottom: 0;">
-                <strong>Bottom Line:</strong> AI doesn't replace jobs; it replaces tasks. Our goal isn't to have fewer people; it's to have highly utilized people. We should pitch AI as a way to make our existing team 30% faster, not as a way to fire people.
+                <strong>Bottom Line:</strong> AI doesn't replace jobs; it replaces tasks. Our goal isn't fewer people; it's highly utilized people.
                 </p>
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("### Step 2: The Billion-Rupee Calculator (Reskill vs. Layoff)")
+            st.markdown("### Step 2: The Calculator (Reskill vs. Layoff)")
             c_inp1, c_inp2 = st.columns(2)
             with c_inp1:
-                num_employees = st.number_input("How many employees are at risk of AI replacement?", min_value=5, max_value=500, value=50, step=5)
-                avg_salary = st.number_input("Their average annual salary (₹)", min_value=200000, max_value=3000000, value=600000, step=50000)
-            with c_inp2: st.markdown("**Industry Standard Costs:**"); st.caption("Severance: 3 months salary | Hiring AI Engineer: 2x salary | Training: 1.5x salary | Morale dip: 1 month salary")
-            st.markdown("---")
-            severance_cost = (avg_salary / 12) * 3 * num_employees
-            new_hire_cost = (avg_salary * 2) * (num_employees * 0.1)
-            total_layoff_cost = severance_cost + new_hire_cost
-            training_cost = (avg_salary / 12) * 1.5 * num_employees
-            productivity_dip = (avg_salary / 12) * 1 * num_employees
-            total_reskill_cost = training_cost + productivity_dip
-            savings = total_layoff_cost - total_reskill_cost
-            c_res1, c_res2, c_res3 = st.columns(3)
-            c_res1.metric("Total Cost of Layoffs", f"₹{total_layoff_cost/10000000:.2f} Cr")
-            c_res2.metric("Total Cost of Reskilling", f"₹{total_reskill_cost/10000000:.2f} Cr")
-            c_res3.metric("Money Saved by Reskilling", f"₹{savings/10000000:.2f} Cr", delta="Reskill wins")
-            st.markdown("---")
-            if savings > 0: st.success(f"**The Verdict: Reskill.** By choosing to reskill instead of laying off, you save ₹{savings/10000000:.2f} Crores.")
-            else: st.warning(f"**The Verdict: Layoffs are technically cheaper here. However, consider hidden costs before proceeding.")
+                num_employees = st.number_input("Employees at risk of AI replacement?", min_value=5, max_value=500, value=50, step=5)
+                avg_salary = st.number_input(f"Their average annual salary ({currency})", min_value=200000, max_value=3000000, value=int(avg_salary_default), step=50000)
+            with c_inp2: st.markdown("**Industry Costs:**"); st.caption("Severance: 3 months | Hiring AI Engineer: 2x salary | Training: 1.5x salary | Morale dip: 1 month salary")
+            
+            if st.button("Calculate", type="primary", key="calc_reskill"):
+                severance_cost = (avg_salary / 12) * 3 * num_employees
+                new_hire_cost = (avg_salary * 2) * (num_employees * 0.1)
+                total_layoff_cost = severance_cost + new_hire_cost
+                training_cost = (avg_salary / 12) * 1.5 * num_employees
+                productivity_dip = (avg_salary / 12) * 1 * num_employees
+                total_reskill_cost = training_cost + productivity_dip
+                savings = total_layoff_cost - total_reskill_cost
+                c_res1, c_res2, c_res3 = st.columns(3)
+                c_res1.metric("Cost of Layoffs", format_currency(total_layoff_cost))
+                c_res2.metric("Cost of Reskilling", format_currency(total_reskill_cost))
+                c_res3.metric("Saved by Reskilling", format_currency(savings), delta="Reskill wins")
+                if savings > 0: st.success(f"**Verdict: Reskill.** Saves {format_currency(savings)}.")
+                else: st.warning(f"**Verdict:** Layoffs technically cheaper, but consider hidden costs.")
+            
             if st.button("✍️ Generate Strategy Memo for CEO", type="primary", key="gen_ai_memo"):
-                with st.spinner("Drafting strategy memo..."):
-                    try:
-                        api_key = st.secrets.get("GROQ_API_KEY", None)
-                        if not api_key: st.warning("🔑 System Error: API Key missing. Showing generic template.")
-                        else:
-                            llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.5, timeout=30)
-                            template = """You are an HR Director writing to the CEO. Keep it strictly under 400 words. Use bullet points. No fluff. **Context:** - We analyzed {num_employees} employees at risk of AI automation. - Layoff + rehiring AI talent costs: {total_layoff_cost}. - Reskilling the same team costs: {total_reskill_cost}. - Reskilling saves us {savings}. **Task:** Recommend reskilling. Briefly explain why layoffs are a trap. Propose a 6-month pilot reskilling program."""
+                llm, error = get_groq_llm()
+                if error:
+                    st.warning("🔑 API key required for AI memo generation. See ⚙️ Settings.")
+                else:
+                    with st.spinner("Drafting strategy memo..."):
+                        try:
+                            template = """You are an HR Director writing to the CEO. Keep it under 400 words. Use bullet points. **Context:** - {num_employees} employees at risk of AI automation. - Layoff cost: {total_layoff_cost}. - Reskilling cost: {total_reskill_cost}. - Reskilling saves: {savings}. **Task:** Recommend reskilling. Explain why layoffs are a trap. Propose a 6-month pilot."""
                             prompt = PromptTemplate.from_template(template); chain = prompt | llm | StrOutputParser()
-                            response = chain.invoke({"num_employees": num_employees, "total_layoff_cost": f"₹{total_layoff_cost/10000000:.1f} Cr", "total_reskill_cost": f"₹{total_reskill_cost/10000000:.1f} Cr", "savings": f"₹{savings/10000000:.1f} Cr"})
+                            response = chain.invoke({"num_employees": num_employees, "total_layoff_cost": format_currency(total_layoff_cost), "total_reskill_cost": format_currency(total_reskill_cost), "savings": format_currency(savings)})
                             st.markdown(f"<div class='llm-response'>{response}</div>", unsafe_allow_html=True)
-                    except Exception as e:
-                        if "rate_limit" in str(e).lower() or "429" in str(e): st.warning("⏳ **AI is busy right now.** Please wait 30 seconds and try again.")
-                        else: st.error(f"❌ Error generating memo: {e}")
+                        except Exception as e:
+                            if "rate_limit" in str(e).lower(): st.warning("⏳ AI busy. Wait 30 seconds and retry.")
+                            else: st.error(f"Error: {e}")
                             
     # ====================================================================
     # Page: STRATEGIC ROADMAP
     # ====================================================================
-    if page == "Strategic Roadmap":
+    if page == "🚀 Strategic Roadmap":
         st.header("🚀 Future Planning & Projections")
-        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>A simple tool to show leadership exactly what happens if we take action vs. if we do nothing.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>A tool to show leadership exactly what happens if we take action vs. if we do nothing.</p>", unsafe_allow_html=True)
+        
+        settings = st.session_state.app_settings
+        currency = settings['currency']
+        salary_map = {'low': settings['salary_low'], 'medium': settings['salary_medium'], 'high': settings['salary_high']}
+        
         st.markdown("### 📋 Step 1: Get Your 6-Month Action Plan")
         issues = []
         if 'satisfaction_level' in df.columns and df['satisfaction_level'].mean() < 0.6: issues.append("Low Employee Satisfaction")
         if 'average_montly_hours' in df.columns and df['average_montly_hours'].mean() > 200: issues.append("Employee Burnout (High Working Hours)")
         if len(issues) == 0: issues.append("Standard Workforce Stabilization")
         issues_str = ", ".join(issues)
-        st.markdown(f"""<div class="custom-card"><h4 style="color: #17B794; margin-top: 0;">🩺 AI Diagnostic Summary</h4><p style="color: #c9d1d9; line-height: 1.6;">Before making a plan, here is what the AI flagged as your biggest risks:<br><strong style="color: #EEB76B;">➤ {issues_str}</strong></p></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="custom-card"><h4 style="color: #17B794; margin-top: 0;">🩺 AI Diagnostic Summary</h4><p style="color: #c9d1d9; line-height: 1.6;">AI flagged risks: <strong style="color: #EEB76B;">➤ {issues_str}</strong></p></div>""", unsafe_allow_html=True)
+        
+        llm, api_error = get_groq_llm()
+        if api_error == "API_KEY_MISSING":
+            st.info("💡 Configure Groq API key in ⚙️ Settings for AI-generated plans")
+        
         if st.button("✍️ Draft My 6-Month HR Action Plan", type="primary"):
-            with st.spinner("Drafting your 6-month strategy..."):
-                try:
-                    api_key = st.secrets.get("GROQ_API_KEY", None)
-                    if api_key:
-                        llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.5)
-                        template = """You are an expert HR Strategist. **Context:** Our AI identified these attrition drivers: {issues}. **Task:** Create a 6-month execution roadmap. Break it into phases. For each month give: 1. Phase Name, 2. Actionable Steps (2-3 bullets), 3. Success Metrics. **Tone:** Plain English. Practical HR actions."""
+            if api_error:
+                st.markdown("""
+                <div class="llm-response">
+<strong>📋 Generic 6-Month HR Action Plan Template</strong>
+
+<strong>Month 1-2: Discovery</strong>
+• Conduct organization-wide engagement survey
+• Identify top 20 at-risk employees
+• Hold 1-on-1 "stay interviews"
+
+<strong>Month 3-4: Intervention</strong>
+• Implement flexible work policies
+• Launch manager training program
+• Begin compensation review process
+
+<strong>Month 5-6: Sustain</strong>
+• Track key metrics weekly
+• Celebrate early wins
+• Prepare 90-day progress report for leadership
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                with st.spinner("Drafting your 6-month strategy..."):
+                    try:
+                        template = """You are an expert HR Strategist. **Context:** Our AI identified these attrition drivers: {issues}. **Task:** Create a 6-month execution roadmap. Break into phases. For each month: 1. Phase Name, 2. Actionable Steps (2-3 bullets), 3. Success Metrics. **Tone:** Practical HR actions."""
                         prompt = PromptTemplate.from_template(template); chain = prompt | llm | StrOutputParser()
                         response = chain.invoke({"issues": issues_str})
                         st.markdown(f"<div class='llm-response'>{response}</div>", unsafe_allow_html=True)
-                    else: st.warning("🔑 API Key missing. Showing generic template.")
-                except Exception as e: st.error(f"Error: {e}")
+                    except Exception as e: st.error(f"Error: {e}")
 
         st.markdown("---"); st.markdown("### 📈 Step 2: See the Future Impact (12-Month Projection)")
         col_f1, col_f2 = st.columns(2)
-        with col_f1: intervention_efficacy = st.slider("If we take action, how many at-risk people will we actually save? (%)", 10, 50, 20, 5)
+        with col_f1: intervention_efficacy = st.slider("If we take action, how many at-risk people will we save? (%)", 10, 50, 20, 5)
         with col_f2: natural_attrition_rate = st.slider("People who leave for personal reasons (%)", 0.5, 2.0, 1.0, 0.1)
         if st.button("📈 Show Me the 12-Month Projection", type="primary"):
             months = list(range(1, 13)); current_workforce = len(df)
@@ -2363,319 +2124,105 @@ def main():
                 temp_int -= monthly_leavers_with_action + natural_leavers_int
                 forecast_bau.append(temp_bau); forecast_intervention.append(temp_int)
             forecast_df = pd.DataFrame({'Month': months, 'If We Do Nothing (Status Quo)': forecast_bau, 'If We Follow the Plan': forecast_intervention}).melt(id_vars='Month', var_name='Scenario', value_name='Workforce Count')
-            fig_forecast             = px.line(forecast_df, x='Month', y='Workforce Count', color='Scenario', title="Projected Workforce Size Over the Next 12 Months", template="plotly_dark", markers=True, color_discrete_map={'If We Do Nothing (Status Quo)': "#EEB76B", 'If We Follow the Plan': "#17B794"})
+            fig_forecast = px.line(forecast_df, x='Month', y='Workforce Count', color='Scenario', title="Projected Workforce Size Over 12 Months", template="plotly_dark", markers=True, color_discrete_map={'If We Do Nothing (Status Quo)': "#EEB76B", 'If We Follow the Plan': "#17B794"})
             fig_forecast.update_layout(yaxis_title="Total Employee Headcount", xaxis=dict(dtick=1)); st.plotly_chart(fig_forecast, use_container_width=True)
             saved_employees = forecast_intervention[-1] - forecast_bau[-1]
-            if 'salary' in df.columns: avg_salary = df['salary'].map({'low': 400000, 'medium': 600000, 'high': 900000}).mean()
-            else: avg_salary = 500000 
-            replacement_cost_per_emp = avg_salary * 0.5; total_money_saved = int(saved_employees) * replacement_cost_per_emp
+            if 'salary' in df.columns: avg_salary_proj = df['salary'].map(salary_map).mean()
+            else: avg_salary_proj = (settings['salary_low'] + settings['salary_high']) / 2
+            replacement_cost_per_emp = avg_salary_proj * 0.5; total_money_saved = int(saved_employees) * replacement_cost_per_emp
             st.markdown("---"); st.markdown("### 🏢 HR Director Summary (For Leadership)")
             col_sum_1, col_sum_2 = st.columns(2)
             with col_sum_1: st.metric("Employees Saved by Plan", f"{int(saved_employees)} People")
-            with col_sum_2: st.metric("Estimated Recruitment Costs Prevented", f"₹{total_money_saved:,.0f}", delta="Financial Value")
-            st.success(f"**The Bottom Line:** Retaining {intervention_efficacy}% saves {int(saved_employees)} employees and prevents **₹{total_money_saved:,.0f}** in costs.")
-            
-            # NEW: Add to action tracker
-            if st.button("📋 Add Roadmap to Action Tracker", type="secondary", key="add_roadmap_action"):
-                action = {
-                    'id': len(st.session_state.action_items) + 1,
-                    'created': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                    'description': f"Execute {intervention_efficacy}% retention plan (Projected savings: ₹{total_money_saved:,.0f})",
-                    'status': 'pending',
-                    'due_date': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
-                    'priority': 'high'
-                }
-                st.session_state.action_items.append(action)
-                st.success("✅ Added to Action Tracker!")
+            with col_sum_2: st.metric("Estimated Costs Prevented", format_currency(total_money_saved), delta="Financial Value")
+            st.success(f"**Bottom Line:** Retaining {intervention_efficacy}% saves {int(saved_employees)} employees and prevents **{format_currency(total_money_saved)}** in costs.")
 
     # ====================================================================
-    # NEW PAGE: EXPORT REPORT
+    # NEW PAGE: DATA DICTIONARY
     # ====================================================================
-    if page == "Export Report":
-        st.header("📄 Export Report")
-        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Generate comprehensive reports for leadership, board presentations, or your records.</p>", unsafe_allow_html=True)
+    if page == "📖 Data Dictionary":
+        st.header("📖 Data Dictionary")
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Understand what each metric means and how to interpret it.</p>", unsafe_allow_html=True)
         
-        # Report options
-        report_type = st.selectbox("Select Report Type", [
-            "Executive Summary (1-page)",
-            "Full Attrition Analysis Report",
-            "Department-wise Breakdown",
-            "Action Items Report",
-            "Model Performance Report"
-        ])
+        st.markdown("""
+        <div class="custom-card" style="border-left: 4px solid #17B794;">
+            <h4 style="color: #17B794; margin-top: 0;">❓ What is this page?</h4>
+            <p style="color: #c9d1d9;">This glossary explains all the terms and metrics used in RetainAI. Refer to this page whenever you're unsure about what a number means.</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        col_r1, col_r2 = st.columns(2)
-        with col_r1:
-            include_timestamp = st.checkbox("Include timestamp", value=True)
-            include_recommendations = st.checkbox("Include recommendations", value=True)
-        with col_r2:
-            include_data_sample = st.checkbox("Include data sample", value=False)
-            include_charts = st.checkbox("Include chart descriptions", value=True)
+        # Core Metrics
+        st.markdown("### 📊 Core Employee Metrics")
+        core_metrics = [
+            ('Satisfaction Level', 'A score from 0 to 1 measuring how happy the employee is with their job. Below 0.5 is concerning.'),
+            ('Last Evaluation', 'Performance rating from the most recent review (0-1 scale). Above 0.7 is good performance.'),
+            ('Number of Projects', 'How many projects the employee is currently assigned. 2-5 is normal. 6+ indicates overload.'),
+            ('Average Monthly Hours', 'Average hours worked per month. Above 200 hours indicates potential burnout risk.'),
+            ('Time Spent at Company', 'Years of tenure. High turnover at 3-5 years indicates career growth issues.'),
+            ('Work Accident', 'Whether the employee had a workplace accident (0=No, 1=Yes). Can impact morale.'),
+            ('Promotion Last 5 Years', 'Whether promoted recently (0=No, 1=Yes). Lack of promotion is a retention risk for high performers.'),
+        ]
         
-        if st.button("📝 Generate Report", type="primary"):
-            with st.spinner("Generating report..."):
-                attrition_rate = (df['left'].sum() / len(df)) * 100
-                total_employees = len(df)
-                total_left = int(df['left'].sum())
-                
-                # Calculate high-risk count
-                feature_cols = [c for c in df.columns if c != 'left']
-                current_df = df[df['left'] == 0].copy()
-                if len(current_df) > 0:
-                    risks = pipeline.predict_proba(current_df[feature_cols])[:, 1]
-                    current_df['Risk_Score'] = calibrate_probability_array(risks)
-                    high_risk_count = len(current_df[current_df['Risk_Score'] > 0.6])
-                    medium_risk_count = len(current_df[(current_df['Risk_Score'] > 0.4) & (current_df['Risk_Score'] <= 0.6)])
-                else:
-                    high_risk_count = 0
-                    medium_risk_count = 0
-                
-                timestamp = datetime.now().strftime('%B %d, %Y at %H:%M') if include_timestamp else "N/A"
-                data_source = 'Custom Upload' if st.session_state.get('is_global') else 'Default Dataset (HR_comma_sep.csv)'
-                
-                if report_type == "Executive Summary (1-page)":
-                    report = generate_executive_summary(df, pipeline, attrition_rate)
-                    st.markdown(report)
-                    
-                    # Download as text
-                    report_text = report.replace('**', '').replace('*', '').replace('#', '').replace('|', ' | ').replace('---', '\n' + '-'*50 + '\n')
-                    
-                elif report_type == "Full Attrition Analysis Report":
-                    report = f"""
-# ATTRITION ANALYSIS REPORT
-Generated: {timestamp}
-Data Source: {data_source}
-
-## 1. OVERVIEW
-- Total Workforce Analyzed: {total_employees:,}
-- Employees Who Left: {total_left:,}
-- Current Attrition Rate: {attrition_rate:.1f}%
-- Active Employees: {(df['left']==0).sum():,}
-
-## 2. RISK DISTRIBUTION (Current Employees)
-- High Risk (>60% probability): {high_risk_count:,} employees
-- Medium Risk (40-60% probability): {medium_risk_count:,} employees
-- Low Risk (<40% probability): {(df['left']==0).sum() - high_risk_count - medium_risk_count:,} employees
-
-## 3. KEY METRICS
-"""
-                    if 'satisfaction_level' in df.columns:
-                        report += f"- Average Satisfaction Level: {df['satisfaction_level'].mean():.2f}/1.0\n"
-                    if 'average_montly_hours' in df.columns:
-                        report += f"- Average Monthly Hours: {df['average_montly_hours'].mean():.0f}\n"
-                    if 'number_project' in df.columns:
-                        report += f"- Average Number of Projects: {df['number_project'].mean():.1f}\n"
-                    if 'time_spend_company' in df.columns:
-                        report += f"- Average Tenure: {df['time_spend_company'].mean():.1f} years\n"
-                    
-                    report += f"\n## 4. MODEL PERFORMANCE\n- Algorithm: LightGBM\n- Accuracy: {st.session_state.model_accuracy:.1%}\n"
-                    
-                    if include_recommendations:
-                        report += """
-## 5. RECOMMENDATIONS
-1. IMMEDIATE: Schedule stay interviews for top high-risk employees
-2. SHORT-TERM: Review workload distribution and compensation
-3. LONG-TERM: Implement quarterly pulse surveys for early detection
-4. BUDGET: Allocate retention budget based on ROI optimization results
-5. MONITORING: Track action items and measure intervention effectiveness
-"""
-                    
-                    if include_data_sample:
-                        report += "\n## 6. DATA SAMPLE (First 10 records)\n"
-                        report += df.head(10).to_string()
-                    
-                    st.markdown(report)
-                    report_text = report
-                    
-                elif report_type == "Department-wise Breakdown":
-                    report = f"""
-# DEPARTMENT-WISE ATTRITION BREAKDOWN
-Generated: {timestamp}
-Data Source: {data_source}
-
-## OVERALL SUMMARY
-- Company Attrition Rate: {attrition_rate:.1f}%
-- Total Employees: {total_employees:,}
-
-"""
-                    if 'Department' in df.columns:
-                        dept_stats = df.groupby('Department').agg({
-                            'left': ['count', 'sum', 'mean']
-                        }).reset_index()
-                        dept_stats.columns = ['Department', 'Total', 'Left', 'Attrition_Rate']
-                        dept_stats['Attrition_Rate'] = (dept_stats['Attrition_Rate'] * 100).round(1)
-                        dept_stats = dept_stats.sort_values('Attrition_Rate', ascending=False)
-                        
-                        for _, row in dept_stats.iterrows():
-                            status = "🚨 CRITICAL" if row['Attrition_Rate'] > 25 else "⚠️ HIGH" if row['Attrition_Rate'] > 15 else "✅ NORMAL"
-                            report += f"### {row['Department']}\n"
-                            report += f"- Total Employees: {row['Total']}\n"
-                            report += f"- Employees Left: {row['Left']}\n"
-                            report += f"- Attrition Rate: {row['Attrition_Rate']}% {status}\n\n"
-                        
-                        report += "\n## DEPARTMENT COMPARISON TABLE\n"
-                        report += dept_stats.to_string(index=False)
-                    else:
-                        report += "*Department column not available in this dataset.*"
-                    
-                    st.markdown(report)
-                    report_text = report
-                    
-                elif report_type == "Action Items Report":
-                    report = f"""
-# ACTION ITEMS REPORT
-Generated: {timestamp}
-
-## SUMMARY
-- Total Action Items: {len(st.session_state.action_items)}
-- Pending: {len([a for a in st.session_state.action_items if a['status'] == 'pending'])}
-- Completed: {len([a for a in st.session_state.action_items if a['status'] == 'completed'])}
-- Overdue: {len([a for a in st.session_state.action_items if a['status'] == 'pending' and a['due_date'] < datetime.now().strftime('%Y-%m-%d')])}
-
-## ACTION ITEMS
-"""
-                    if len(st.session_state.action_items) == 0:
-                        report += "*No action items recorded yet.*"
-                    else:
-                        for i, action in enumerate(st.session_state.action_items, 1):
-                            is_overdue = action['status'] == 'pending' and action['due_date'] < datetime.now().strftime('%Y-%m-%d')
-                            report += f"{i}. [{action['status'].upper()}{' - OVERDUE' if is_overdue else ''}] {action['description']}\n"
-                            report += f"   Created: {action['created']} | Due: {action['due_date']} | Priority: {action['priority'].upper()}\n\n"
-                    
-                    st.markdown(report)
-                    report_text = report
-                    
-                elif report_type == "Model Performance Report":
-                    report = f"""
-# MODEL PERFORMANCE REPORT
-Generated: {timestamp}
-Data Source: {data_source}
-
-## MODEL CONFIGURATION
-- Algorithm: LightGBM (Light Gradient Boosting Machine)
-- Training Records: {len(X_train_ref):,}
-- Test Records: {len(X_test_cur):,}
-- Train/Test Split: 80/20
-- Random State: 42
-
-## HYPERPARAMETERS
-- n_estimators: 150
-- learning_rate: 0.05
-- num_leaves: 12
-- max_depth: 4
-- min_child_samples: 40
-- reg_alpha: 0.5
-- reg_lambda: 0.5
-- subsample: 0.8
-- colsample_bytree: 0.8
-- scale_pos_weight: 1.5
-
-## PERFORMANCE METRICS
-- Accuracy: {st.session_state.model_accuracy:.1%}
-"""
-                    
-                    # Calculate additional metrics
-                    y_pred = pipeline.predict(X_test_cur)
-                    y_proba = pipeline.predict_proba(X_test_cur)[:, 1]
-                    
-                    report += f"- Precision: {precision_score(y_test, y_pred, zero_division=0):.1%}\n"
-                    report += f"- Recall: {recall_score(y_test, y_pred, zero_division=0):.1%}\n"
-                    report += f"- F1 Score: {f1_score(y_test, y_pred, zero_division=0):.1%}\n"
-                    report += f"- ROC AUC: {roc_auc_score(y_test, y_proba):.1%}\n"
-                    
-                    report += """
-## CALIBRATION
-- Temperature Scaling: 0.55
-- Purpose: To convert raw model probabilities into more interpretable risk percentages
-
-## FEATURE ENGINEERING
-- Categorical Encoding: One-Hot Encoding
-- Numerical Features: Passed through without scaling (Tree-based model)
-
-## WHY LIGHTGBM?
-LightGBM was selected after benchmarking against:
-- Random Forest
-- Logistic Regression
-
-LightGBM provides the best balance of:
-- High accuracy
-- Fast training time
-- Built-in handling of missing values
-- Feature importance interpretability
-"""
-                    
-                    st.markdown(report)
-                    report_text = report
-                
-                # Download buttons
-                st.markdown("---")
-                col_d1, col_d2, col_d3 = st.columns(3)
-                
-                with col_d1:
-                    st.download_button(
-                        "⬇️ Download as TXT",
-                        report_text.encode('utf-8'),
-                        f"retainai_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                        "text/plain"
-                    )
-                
-                with col_d2:
-                    # Create markdown file
-                    st.download_button(
-                        "⬇️ Download as Markdown",
-                        report.encode('utf-8'),
-                        f"retainai_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                        "text/markdown"
-                    )
-                
-                with col_d3:
-                    # Create JSON summary
-                    summary_json = {
-                        "generated": timestamp,
-                        "total_employees": total_employees,
-                        "attrition_rate": round(attrition_rate, 1),
-                        "high_risk_employees": high_risk_count,
-                        "model_accuracy": round(st.session_state.model_accuracy, 3) if st.session_state.model_accuracy else None,
-                        "action_items_count": len(st.session_state.action_items),
-                        "pending_actions": len([a for a in st.session_state.action_items if a['status'] == 'pending'])
-                    }
-                    st.download_button(
-                        "⬇️ Download JSON Summary",
-                        json.dumps(summary_json, indent=2).encode('utf-8'),
-                        f"retainai_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                        "application/json"
-                    )
+        for term, definition in core_metrics:
+            st.markdown(f"""
+            <div class="glossary-item">
+                <div class="glossary-term">{term}</div>
+                <div class="glossary-definition">{definition}</div>
+            </div>
+            """, unsafe_allow_html=True)
         
-        # Quick export options
-        st.markdown("---")
-        st.markdown("### ⚡ Quick Data Export")
+        # AI Metrics
+        st.markdown("### 🤖 AI Prediction Metrics")
+        ai_metrics = [
+            ('Risk Score', 'A percentage (0-100%) indicating how likely the employee is to leave. Above 50% = High Risk.'),
+            ('Risk Level', 'Categorization: Critical (75%+), High (50-74%), Medium (30-49%), Low (0-29%).'),
+            ('Confidence Interval', 'A range showing the uncertainty in our prediction. Wider range = less certain.'),
+            ('SHAP Value', 'A technical measure showing how much each factor contributed to a specific prediction.'),
+            ('Counterfactual', 'A "what-if" scenario showing what changes would make an employee stay.'),
+        ]
         
-        col_q1, col_q2 = st.columns(2)
-        with col_q1:
-            if st.button("📥 Export Raw Dataset"):
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    "Download CSV",
-                    csv,
-                    f"hr_data_{datetime.now().strftime('%Y%m%d')}.csv",
-                    "text/csv"
-                )
-        with col_q2:
-            if st.button("📥 Export Risk Scores"):
-                feature_cols = [c for c in df.columns if c != 'left']
-                risk_df = df.copy()
-                risk_df['Risk_Score'] = calibrate_probability_array(pipeline.predict_proba(risk_df[feature_cols])[:, 1])
-                risk_df['Risk_Category'] = risk_df['Risk_Score'].apply(
-                    lambda x: 'HIGH' if x > 0.6 else 'MEDIUM' if x > 0.4 else 'LOW'
-                )
-                risk_df = risk_df.sort_values('Risk_Score', ascending=False)
-                csv = risk_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    "Download Risk CSV",
-                    csv,
-                    f"risk_scores_{datetime.now().strftime('%Y%m%d')}.csv",
-                    "text/csv"
-                )
+        for term, definition in ai_metrics:
+            st.markdown(f"""
+            <div class="glossary-item">
+                <div class="glossary-term">{term}</div>
+                <div class="glossary-definition">{definition}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Financial Metrics
+        st.markdown("### 💰 Financial Metrics")
+        financial_metrics = [
+            ('Cost to Retain', 'Typically 10% of annual salary. The cost of interventions to keep an employee.'),
+            ('Expected Loss', 'Risk Score × 50% of Salary. The expected cost if the employee leaves.'),
+            ('Net Savings', 'Expected Loss - Cost to Retain. Positive = Retention is cheaper than replacement.'),
+            ('Replacement Cost', 'Typically 50-200% of annual salary, depending on role and tenure.'),
+            ('ROI Optimizer', 'Mathematical algorithm that finds the best employees to retain within a budget.'),
+        ]
+        
+        for term, definition in financial_metrics:
+            st.markdown(f"""
+            <div class="glossary-item">
+                <div class="glossary-term">{term}</div>
+                <div class="glossary-definition">{definition}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Model Performance
+        st.markdown("### 📈 Model Performance Terms")
+        model_metrics = [
+            ('Accuracy', 'Percentage of correct predictions out of all predictions.'),
+            ('Precision', 'Of all "Leave" predictions, how many actually left. Important to avoid false alarms.'),
+            ('Recall', 'Of all who actually left, how many did we correctly predict. Important to not miss at-risk employees.'),
+            ('F1 Score', 'Balance between Precision and Recall. Higher is better.'),
+            ('ROC AUC', 'Overall model quality measure. 0.5 = random guessing, 1.0 = perfect predictions.'),
+        ]
+        
+        for term, definition in model_metrics:
+            st.markdown(f"""
+            <div class="glossary-item">
+                <div class="glossary-term">{term}</div>
+                <div class="glossary-definition">{definition}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
