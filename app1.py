@@ -1514,7 +1514,7 @@ def main():
         st.header("🧠 Key Attrition Drivers")  # FIXED: Added proper header
         st.write("Understand the specific factors driving your team's attrition risk, explained simply.")
         st.write("---")
-        analyze_why_people_leave)
+        analyze_why_people_leave(df)
         
         with st.spinner("Analyzing model insights..."):
             shap_values, X_processed_df = get_shap_explanations(pipeline, df)
