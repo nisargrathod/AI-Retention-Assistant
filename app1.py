@@ -29,21 +29,30 @@ from scipy.optimize import milp, LinearConstraint, Bounds
 
 # --- Imports for Evaluation 2 (Intelligent Interface: Groq + Evidently) ---
 from evidently.report import Report
-from evidently.metric_preset import DataDriftPreset, DataQualityPreset, ClassificationPreset
-from evidently.metrics import (
-    DatasetDriftMetric,
-    DataDriftTable,
-    DataQualityMetric,
-    ColumnQuantileMetric,
-    ColumnMissingValuesMetric,
-    ColumnValueRangeMetric,
-    ClassificationQualityMetric,
-    RocAucMetric,
-    PrecisionMetric,
-    RecallMetric,
-    F1Metric
-)
 from evidently.pipeline.column_mapping import ColumnMapping
+
+# VERSION-AGNOSTIC EVIDENTLY IMPORTS
+try:
+    # Try newer Evidently version (0.4.x+)
+    from evidently.metric_preset import DataDriftPreset, DataQualityPreset, ClassificationPreset
+    from evidently.metrics import DatasetDriftMetric, DataDriftTable
+    EVIDENTLY_VERSION = "new"
+except ImportError:
+    try:
+        # Try older Evidently version (0.3.x)
+        from evidently.metric_preset import DataDriftPreset, DataQualityPreset, ClassificationPreset
+        EVIDENTLY_VERSION = "old"
+        DatasetDriftMetric = None
+        DataDriftTable = None
+    except ImportError:
+        # Minimal fallback
+        EVIDENTLY_VERSION = "minimal"
+        DataDriftPreset = None
+        DataQualityPreset = None
+        ClassificationPreset = None
+        DatasetDriftMetric = None
+        DataDriftTable = None
+
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -267,15 +276,6 @@ st.markdown("""
         background: linear-gradient(135deg, #0d2818 0%, #1c2128 100%);
     }
     
-    /* Evidently Report Styling */
-    .evidently-container {
-        background-color: #1c2128;
-        border: 1px solid #30363d;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-    
     .drift-status-ok {
         background-color: #0d2818;
         border: 1px solid #17B794;
@@ -357,7 +357,7 @@ def calibrate_probability_array(probs, temperature=0.55):
     return expit(scaled_logit)
 
 # ====================================================================
-# EVIDENTLY AI FUNCTIONS
+# EVIDENTLY AI FUNCTIONS (VERSION-AGNOSTIC)
 # ====================================================================
 
 def get_column_mapping(df, target_col='left'):
@@ -373,7 +373,7 @@ def get_column_mapping(df, target_col='left'):
 
 
 def run_data_drift_analysis(reference_df, current_df, target_col='left'):
-    """Run data drift analysis using Evidently AI"""
+    """Run data drift analysis using Evidently AI - version agnostic"""
     column_mapping = get_column_mapping(reference_df, target_col)
     
     # Ensure both dataframes have the same columns
@@ -385,10 +385,18 @@ def run_data_drift_analysis(reference_df, current_df, target_col='left'):
     if target_col not in current_df.columns:
         current_df[target_col] = np.nan
     
-    report = Report(metrics=[
-        DatasetDriftMetric(),
-        DataDriftTable(),
-    ])
+    if EVIDENTLY_VERSION == "new" and DatasetDriftMetric is not None:
+        # Use individual metrics for newer versions
+        report = Report(metrics=[
+            DatasetDriftMetric(),
+            DataDriftTable(),
+        ])
+    elif DataDriftPreset is not None:
+        # Use preset for older versions
+        report = Report(metrics=[DataDriftPreset()])
+    else:
+        # Minimal fallback - return None
+        return None
     
     report.run(reference_data=reference_df, current_data=current_df, column_mapping=column_mapping)
     
@@ -396,14 +404,13 @@ def run_data_drift_analysis(reference_df, current_df, target_col='left'):
 
 
 def run_data_quality_report(df, target_col='left'):
-    """Run data quality analysis using Evidently AI"""
+    """Run data quality analysis using Evidently AI - version agnostic"""
     column_mapping = get_column_mapping(df, target_col)
     
-    report = Report(metrics=[
-        DataQualityMetric(),
-        ColumnMissingValuesMetric(),
-        ColumnValueRangeMetric(column_name=target_col, left=0, right=1),
-    ])
+    if DataQualityPreset is not None:
+        report = Report(metrics=[DataQualityPreset()])
+    else:
+        return None
     
     report.run(reference_data=df, current_data=df, column_mapping=column_mapping)
     
@@ -411,20 +418,17 @@ def run_data_quality_report(df, target_col='left'):
 
 
 def run_classification_performance_report(reference_df, current_df, predictions, target_col='left'):
-    """Run classification performance analysis using Evidently AI"""
+    """Run classification performance analysis using Evidently AI - version agnostic"""
     column_mapping = get_column_mapping(reference_df, target_col)
     
     # Create a copy with predictions
     current_df = current_df.copy()
     current_df['prediction'] = predictions
     
-    report = Report(metrics=[
-        ClassificationQualityMetric(),
-        RocAucMetric(),
-        PrecisionMetric(),
-        RecallMetric(),
-        F1Metric(),
-    ])
+    if ClassificationPreset is not None:
+        report = Report(metrics=[ClassificationPreset()])
+    else:
+        return None
     
     report.run(reference_data=reference_df, current_data=current_df, column_mapping=column_mapping)
     
@@ -433,6 +437,9 @@ def run_classification_performance_report(reference_df, current_df, predictions,
 
 def extract_drift_metrics(report):
     """Extract drift metrics from Evidently report as dictionary"""
+    if report is None:
+        return {'error': 'Evidently not available'}
+    
     try:
         result = {}
         for metric_result in report._metrics:
@@ -452,9 +459,20 @@ def extract_drift_metrics(report):
 
 def render_drift_summary(drift_metrics):
     """Render a visual summary of drift metrics"""
+    if 'error' in drift_metrics:
+        st.warning(f"Evidently metrics unavailable: {drift_metrics['error']}")
+        return False, 0, 0
+    
     try:
         # Check for dataset drift
         dataset_drift = drift_metrics.get('DatasetDriftMetric', {})
+        if not dataset_drift:
+            # Try DataDriftPreset results
+            for key, val in drift_metrics.items():
+                if 'dataset_drift' in str(val).lower():
+                    dataset_drift = val
+                    break
+        
         is_drifted = dataset_drift.get('dataset_drift', False)
         drift_share = dataset_drift.get('number_of_drifted_columns', 0)
         total_columns = dataset_drift.get('number_of_columns', 1)
@@ -484,9 +502,20 @@ def render_drift_summary(drift_metrics):
 
 def render_drift_table(drift_metrics):
     """Render detailed drift table for each feature"""
+    if 'error' in drift_metrics:
+        st.info("Detailed drift table unavailable")
+        return
+    
     try:
         drift_table = drift_metrics.get('DataDriftTable', {})
         drift_per_column = drift_table.get('drift_per_column', {})
+        
+        if not drift_per_column:
+            # Try to find drift data in other keys
+            for key, val in drift_metrics.items():
+                if isinstance(val, dict) and 'drift_per_column' in val:
+                    drift_per_column = val['drift_per_column']
+                    break
         
         if not drift_per_column:
             st.info("No per-column drift data available")
@@ -524,41 +553,53 @@ def render_drift_table(drift_metrics):
 
 def render_classification_metrics(classification_metrics):
     """Render classification performance metrics"""
+    if 'error' in classification_metrics:
+        st.info("Classification metrics unavailable from Evidently")
+        return
+    
     try:
-        metrics_to_show = {
-            'ClassificationQualityMetric': 'Overall Quality',
-            'RocAucMetric': 'ROC AUC',
-            'PrecisionMetric': 'Precision',
-            'RecallMetric': 'Recall',
-            'F1Metric': 'F1 Score'
-        }
+        # Try to extract metrics from the result
+        metrics_data = {}
         
-        cols = st.columns(len(metrics_to_show))
+        for key, val in classification_metrics.items():
+            if isinstance(val, dict):
+                # Look for common metric keys
+                if 'roc_auc' in str(val).lower():
+                    metrics_data['ROC AUC'] = val.get('value', val.get('roc_auc', 0))
+                if 'precision' in str(val).lower() and 'recall' not in key.lower():
+                    metrics_data['Precision'] = val.get('value', val.get('precision', 0))
+                if 'recall' in str(val).lower():
+                    metrics_data['Recall'] = val.get('value', val.get('recall', 0))
+                if 'f1' in str(val).lower():
+                    metrics_data['F1 Score'] = val.get('value', val.get('f1', 0))
+                if 'accuracy' in str(val).lower():
+                    metrics_data['Accuracy'] = val.get('value', val.get('accuracy', 0))
+                if 'quality' in key.lower():
+                    metrics_data['Overall Quality'] = val.get('value', val.get('quality', 0))
         
-        for idx, (metric_key, display_name) in enumerate(metrics_to_show.items()):
-            metric_data = classification_metrics.get(metric_key, {})
-            value = metric_data.get('value', metric_data.get('current', 0))
+        if metrics_data:
+            cols = st.columns(len(metrics_data))
             
-            if isinstance(value, (int, float)):
-                if value > 0.8:
-                    color = '#17B794'
-                elif value > 0.6:
-                    color = '#EEB76B'
-                else:
-                    color = '#FF4B4B'
-                
-                metric_html = f"""
-                <div class="metric-card">
-                    <div class="metric-card-value" style="color: {color};">{value:.3f}</div>
-                    <div class="metric-card-label">{display_name}</div>
-                </div>
-                """
-                
-                with cols[idx]:
-                    st.markdown(metric_html, unsafe_allow_html=True)
-            else:
-                with cols[idx]:
-                    st.metric(display_name, "N/A")
+            for idx, (metric_name, value) in enumerate(metrics_data.items()):
+                if isinstance(value, (int, float)):
+                    if value > 0.8:
+                        color = '#17B794'
+                    elif value > 0.6:
+                        color = '#EEB76B'
+                    else:
+                        color = '#FF4B4B'
+                    
+                    metric_html = f"""
+                    <div class="metric-card">
+                        <div class="metric-card-value" style="color: {color};">{value:.3f}</div>
+                        <div class="metric-card-label">{metric_name}</div>
+                    </div>
+                    """
+                    
+                    with cols[idx]:
+                        st.markdown(metric_html, unsafe_allow_html=True)
+        else:
+            st.info("No classification metrics extracted")
         
     except Exception as e:
         st.warning(f"Could not render classification metrics: {e}")
@@ -819,6 +860,11 @@ def main():
     st.set_page_config(page_title="RetainAI | Enterprise Workforce Intelligence", page_icon="🧠", layout="wide")
     warnings.simplefilter(action='ignore', category=FutureWarning)
 
+    # Show Evidently version info (debug)
+    if st.secrets.get("DEBUG_MODE", "false").lower() == "true":
+        with st.sidebar:
+            st.caption(f"Evidently version: {EVIDENTLY_VERSION}")
+
     # ====================================================================
     # THE GLOBAL ROUTER
     # ====================================================================
@@ -972,42 +1018,46 @@ def main():
                 if st.button("🔬 Run Data Quality Report", type="secondary", key="quality_check"):
                     with st.spinner("Analyzing data quality..."):
                         try:
-                            # Prepare data for Evidently
                             quality_df = new_df.copy()
                             quality_df[target_col] = quality_df[target_col].apply(lambda x: 1 if x == left_value else 0)
                             
                             quality_report = run_data_quality_report(quality_df, target_col)
-                            quality_metrics = extract_drift_metrics(quality_report)
                             
-                            st.success("✅ Data Quality Report Generated")
-                            
-                            # Display quality metrics
-                            quality_data = quality_metrics.get('DataQualityMetric', {})
-                            
-                            col_q1, col_q2, col_q3, col_q4 = st.columns(4)
-                            
-                            with col_q1:
-                                st.metric("Total Rows", quality_data.get('rows_count', len(new_df)))
-                            with col_q2:
-                                st.metric("Total Columns", quality_data.get('columns_count', len(new_df.columns)))
-                            with col_q3:
-                                missing = quality_data.get('missing_values', {}).get('number_of_missing_values', 0)
-                                st.metric("Missing Values", missing, delta="Should be low" if missing > 0 else "Perfect")
-                            with col_q4:
-                                empty_cols = quality_data.get('empty_columns', {}).get('number_of_empty_columns', 0)
-                                st.metric("Empty Columns", empty_cols, delta="None" if empty_cols == 0 else "Check data")
-                            
-                            # Show missing values by column if any
-                            if missing > 0:
-                                with st.expander("📋 Missing Values by Column"):
-                                    missing_by_col = quality_data.get('missing_values', {}).get('share_of_missing_values_by_column', {})
-                                    if missing_by_col:
-                                        missing_df = pd.DataFrame([
-                                            {'Column': k.replace('_', ' ').title(), 'Missing %': f"{v*100:.1f}%"}
-                                            for k, v in missing_by_col.items() if v > 0
-                                        ])
-                                        st.dataframe(missing_df, use_container_width=True)
-                            
+                            if quality_report is None:
+                                st.warning("⚠️ Evidently AI quality report not available (version compatibility issue). Showing basic stats instead.")
+                                col_q1, col_q2, col_q3 = st.columns(3)
+                                with col_q1: st.metric("Total Rows", len(new_df))
+                                with col_q2: st.metric("Total Columns", len(new_df.columns))
+                                with col_q3: st.metric("Missing Values", new_df.isnull().sum().sum())
+                            else:
+                                quality_metrics = extract_drift_metrics(quality_report)
+                                st.success("✅ Data Quality Report Generated")
+                                
+                                quality_data = quality_metrics.get('DataQualityMetric', {})
+                                
+                                col_q1, col_q2, col_q3, col_q4 = st.columns(4)
+                                
+                                with col_q1:
+                                    st.metric("Total Rows", quality_data.get('rows_count', len(new_df)))
+                                with col_q2:
+                                    st.metric("Total Columns", quality_data.get('columns_count', len(new_df.columns)))
+                                with col_q3:
+                                    missing = quality_data.get('missing_values', {}).get('number_of_missing_values', 0)
+                                    st.metric("Missing Values", missing, delta="Should be low" if missing > 0 else "Perfect")
+                                with col_q4:
+                                    empty_cols = quality_data.get('empty_columns', {}).get('number_of_empty_columns', 0)
+                                    st.metric("Empty Columns", empty_cols, delta="None" if empty_cols == 0 else "Check data")
+                                
+                                if missing > 0:
+                                    with st.expander("📋 Missing Values by Column"):
+                                        missing_by_col = quality_data.get('missing_values', {}).get('share_of_missing_values_by_column', {})
+                                        if missing_by_col:
+                                            missing_df = pd.DataFrame([
+                                                {'Column': k.replace('_', ' ').title(), 'Missing %': f"{v*100:.1f}%"}
+                                                for k, v in missing_by_col.items() if v > 0
+                                            ])
+                                            st.dataframe(missing_df, use_container_width=True)
+                                            
                         except Exception as e:
                             st.error(f"Data quality check failed: {e}")
                 
@@ -1065,22 +1115,43 @@ def main():
             if st.button("🔍 Run Quick Drift Check", type="secondary", key="quick_drift"):
                 with st.spinner("Checking for data drift..."):
                     try:
-                        # Use train/test split for drift comparison
                         reference_data = df.sample(frac=0.8, random_state=42)
                         current_data = df.drop(reference_data.index)
                         
                         drift_report = run_data_drift_analysis(reference_data, current_data)
-                        drift_metrics = extract_drift_metrics(drift_report)
                         
-                        is_drifted, drift_cols, total_cols = render_drift_summary(drift_metrics)
-                        
-                        if not is_drifted:
-                            st.success("✅ Your data is stable. No significant drift detected between the reference and current periods.")
+                        if drift_report is None:
+                            st.warning("⚠️ Evidently AI drift analysis not available. Using basic statistics instead.")
+                            
+                            # Fallback: basic statistical comparison
+                            numeric_cols = df.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
+                            drift_detected = 0
+                            total_cols = len(numeric_cols)
+                            
+                            for col in numeric_cols[:10]:  # Check first 10 numeric columns
+                                ref_mean = reference_data[col].mean()
+                                cur_mean = current_data[col].mean()
+                                ref_std = reference_data[col].std()
+                                if ref_std > 0:
+                                    z_score = abs(ref_mean - cur_mean) / ref_std
+                                    if z_score > 2:  # Simple threshold
+                                        drift_detected += 1
+                            
+                            if drift_detected > 0:
+                                st.warning(f"⚠️ Basic check: {drift_detected}/{total_cols} features may have shifted")
+                            else:
+                                st.success("✅ Basic check: Data appears stable")
                         else:
-                            st.warning(f"⚠️ Drift detected in {drift_cols} features. Consider retraining your model.")
-                        
-                        with st.expander("📊 Detailed Drift Table"):
-                            render_drift_table(drift_metrics)
+                            drift_metrics = extract_drift_metrics(drift_report)
+                            is_drifted, drift_cols, total_cols = render_drift_summary(drift_metrics)
+                            
+                            if not is_drifted:
+                                st.success("✅ Your data is stable. No significant drift detected between the reference and current periods.")
+                            else:
+                                st.warning(f"⚠️ Drift detected in {drift_cols} features. Consider retraining your model.")
+                            
+                            with st.expander("📊 Detailed Drift Table"):
+                                render_drift_table(drift_metrics)
                     
                     except Exception as e:
                         st.error(f"Drift check failed: {e}")
@@ -1310,7 +1381,6 @@ def main():
         st.markdown("<h1 style='margin-bottom: 5px;'>💰 Budget Planner</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af; font-size: 1.1rem; margin-bottom: 30px;'>A two-step financial playbook to secure executive budget approval and optimize your spend.</p>", unsafe_allow_html=True)
         
-        # --- PHASE 1: TRUE COST OF TURNOVER ---
         st.markdown("""
         <div class="custom-card" style="border-left: 5px solid #FF4B4B; background: linear-gradient(to right, #2d1515 0%, #1c2128 100%);">
             <h3 style="color: #FF4B4B; margin-top: 0;">💸 Phase 1: The Burn Rate</h3>
@@ -1388,7 +1458,6 @@ def main():
 
         st.markdown("<br><hr style='border-color: #30363d;'><br>", unsafe_allow_html=True)
         
-        # --- PHASE 2: THE ROI OPTIMIZER ---
         st.markdown("""
         <div class="custom-card" style="border-left: 5px solid #17B794; background: linear-gradient(to right, #0d2818 0%, #1c2128 100%);">
             <h3 style="color: #17B794; margin-top: 0;">🛡️ Phase 2: The ROI Optimizer</h3>
@@ -1445,7 +1514,6 @@ def main():
                             total_investment = selected_employees['cost_to_retain'].sum()
                             total_savings = selected_employees['net_savings'].sum()
                             
-                            
                             st.success("✅ **Optimization Complete.** Here is your action plan:")
                             
                             m1, m2, m3 = st.columns(3)
@@ -1493,9 +1561,6 @@ def main():
         st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Advanced modules for Strategy, Disruption, and Recruitment.</p>", unsafe_allow_html=True)
         tab1, tab2, tab3, tab4 = st.tabs(["📊 Model Benchmarking", "🔬 Departmental Strategy Deep Dive", "🛡️ AI Disruption Defense", "📈 Data Drift & Monitoring"])
         
-        # ====================================================================
-        # TAB 1: MODEL BENCHMARKING (with Evidently Classification Metrics)
-        # ====================================================================
         with tab1:
             st.subheader("Algorithm Performance Comparison")
             st.caption("Using Evidently AI for comprehensive classification metrics")
@@ -1519,7 +1584,6 @@ def main():
                     st.caption("Detailed classification quality analysis by Evidently AI")
                     
                     try:
-                        # Prepare data for Evidently
                         reference_data = X_train_ref.copy()
                         reference_data['left'] = y_train.values
                         
@@ -1527,45 +1591,30 @@ def main():
                         current_data['left'] = y_test.values
                         current_data['prediction'] = y_pred_lgbm
                         
-                        column_mapping = get_column_mapping(reference_data, 'left')
+                        classification_report = run_classification_performance_report(reference_data, current_data, y_pred_lgbm)
                         
-                        classification_report = Report(metrics=[
-                            ClassificationQualityMetric(),
-                            RocAucMetric(),
-                            PrecisionMetric(),
-                            RecallMetric(),
-                            F1Metric(),
-                        ])
-                        
-                        classification_report.run(
-                            reference_data=reference_data, 
-                            current_data=current_data, 
-                            column_mapping=column_mapping
-                        )
-                        
-                        classification_metrics = extract_drift_metrics(classification_report)
-                        render_classification_metrics(classification_metrics)
-                        
-                        # Show detailed metrics table
-                        with st.expander("📋 Detailed Metrics Breakdown"):
-                            for metric_name, metric_data in classification_metrics.items():
-                                st.markdown(f"**{metric_name}**")
-                                if isinstance(metric_data, dict):
-                                    for k, v in metric_data.items():
-                                        if isinstance(v, float):
-                                            st.write(f"  • {k}: `{v:.4f}`")
-                                        else:
-                                            st.write(f"  • {k}: `{v}`")
-                                st.markdown("---")
+                        if classification_report is None:
+                            st.warning("⚠️ Evidently AI classification report not available (version compatibility). Using sklearn metrics shown above.")
+                        else:
+                            classification_metrics = extract_drift_metrics(classification_report)
+                            render_classification_metrics(classification_metrics)
+                            
+                            with st.expander("📋 Detailed Metrics Breakdown"):
+                                for metric_name, metric_data in classification_metrics.items():
+                                    st.markdown(f"**{metric_name}**")
+                                    if isinstance(metric_data, dict):
+                                        for k, v in metric_data.items():
+                                            if isinstance(v, float):
+                                                st.write(f"  • {k}: `{v:.4f}`")
+                                            else:
+                                                st.write(f"  • {k}: `{v}`")
+                                    st.markdown("---")
                                             
                     except Exception as e:
                         st.warning(f"Evidently classification report failed: {e}")
                     
                     st.success("🏆 **Conclusion:** LightGBM was selected as the primary model due to its superior balance of Precision and Recall.")
 
-        # ====================================================================
-        # TAB 2: DEPARTMENTAL STRATEGY DEEP DIVE
-        # ====================================================================
         with tab2:
             st.subheader("🔬 Departmental Strategy Deep Dive")
             if 'Department' not in df.columns: st.warning("Department column not found in this dataset. Cannot run deep dive.")
@@ -1628,9 +1677,6 @@ def main():
                                         card_html = f"<div class='custom-card' style='border-top: 4px solid #17B794;'><div style='display: flex; align-items: center; margin-bottom: 10px;'><span style='font-size: 1.5rem; margin-right: 10px;'>{icon}</span><h4 style='margin: 0; color: #fff;'>{title}</h4></div><p style='color: #c9d1d9; font-size: 0.9rem; margin-bottom: 5px;'>{advice}</p><small style='color: #8b949e;'>Driver: {feature_name.replace('_', ' ').title()}</small></div></div>"
                                         with col: st.markdown(card_html, unsafe_allow_html=True)
 
-        # ====================================================================
-        # TAB 3: AI DISRUPTION DEFENSE
-        # ====================================================================
         with tab3:
             st.subheader("🛡️ AI Disruption Defense")
             st.caption("Prove to leadership that reskilling is cheaper than mass layoffs.")
@@ -1716,6 +1762,16 @@ def main():
             </div>
             """, unsafe_allow_html=True)
             
+            # Check if Evidently is available
+            if EVIDENTLY_VERSION == "minimal":
+                st.warning("""
+                ⚠️ **Evidently AI Limited Mode**
+                
+                The installed version of Evidently AI has compatibility issues. Using fallback drift detection based on basic statistical methods.
+                
+                To get full Evidently features, try upgrading: `pip install evidently==0.4.22`
+                """)
+            
             st.markdown("### 📊 What is Data Drift?")
             st.markdown("""
             <p style='color: #c9d1d9; line-height: 1.6;'>
@@ -1742,19 +1798,21 @@ def main():
                     ]
                 )
             with col_drift2:
-                drift_threshold = st.slider(
-                    "Drift Sensitivity Threshold",
-                    min_value=0.01,
-                    max_value=0.20,
-                    value=0.05,
-                    step=0.01,
-                    help="Lower values = more sensitive to small changes"
-                )
+                if EVIDENTLY_VERSION != "minimal":
+                    drift_threshold = st.slider(
+                        "Drift Sensitivity Threshold",
+                        min_value=0.01,
+                        max_value=0.20,
+                        value=0.05,
+                        step=0.01,
+                        help="Lower values = more sensitive to small changes"
+                    )
+                else:
+                    st.info("Using default threshold: 2 standard deviations")
             
             if st.button("🔍 Run Data Drift Analysis", type="primary", key="run_drift_analysis"):
-                with st.spinner("Running Evidently AI drift analysis..."):
+                with st.spinner("Running drift analysis..."):
                     try:
-                        # Prepare data based on scenario
                         full_data = df.copy()
                         
                         if drift_scenario == "Train vs Test Split (Default)":
@@ -1782,65 +1840,153 @@ def main():
                             current_df = full_data[full_data['risk_score'] >= 0.5].copy()
                             scenario_desc = "Low Risk (< 50%) vs High Risk (≥ 50%) employees"
                         
-                        # Run Evidently Drift Report
+                        # Run drift analysis
                         drift_report = run_data_drift_analysis(reference_df, current_df)
-                        drift_metrics = extract_drift_metrics(drift_report)
                         
-                        # Display results
                         st.markdown("---")
                         st.markdown(f"### 📊 Results: {scenario_desc}")
                         
-                        # Summary metrics
-                        is_drifted, drift_cols, total_cols = render_drift_summary(drift_metrics)
+                        if drift_report is None:
+                            # FALLBACK: Basic statistical drift detection
+                            st.info("Using basic statistical drift detection (Evidently not fully available)")
+                            
+                            numeric_cols = full_data.select_dtypes(include=np.number).columns.drop('left', errors='ignore').tolist()
+                            drift_results = []
+                            total_checked = 0
+                            drift_detected_count = 0
+                            
+                            for col in numeric_cols:
+                                ref_mean = reference_df[col].mean()
+                                cur_mean = current_df[col].mean()
+                                ref_std = reference_df[col].std()
+                                
+                                if ref_std > 0:
+                                    z_score = abs(ref_mean - cur_mean) / ref_std
+                                    is_drifted = z_score > 2
+                                    total_checked += 1
+                                    if is_drifted:
+                                        drift_detected_count += 1
+                                    
+                                    drift_results.append({
+                                        'Feature': col.replace('_', ' ').title(),
+                                        'Drift Detected': 'Yes' if is_drifted else 'No',
+                                        'Z-Score': round(z_score, 4),
+                                        'Reference Mean': round(ref_mean, 3),
+                                        'Current Mean': round(cur_mean, 3),
+                                        'Difference': round(cur_mean - ref_mean, 3)
+                                    })
+                            
+                            if drift_results:
+                                drift_df = pd.DataFrame(drift_results)
+                                drift_df = drift_df.sort_values('Z-Score', ascending=False)
+                                
+                                # Summary
+                                is_drifted = drift_detected_count > 0
+                                if is_drifted:
+                                    st.markdown(f"""
+                                    <div class="drift-status-alert">
+                                        <h3 style="color: #FF4B4B; margin: 0;">⚠️ POTENTIAL DRIFT DETECTED</h3>
+                                        <p style="color: #c9d1d9; margin: 10px 0 0 0;">{drift_detected_count} out of {total_checked} features show significant changes (Z-score > 2)</p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"""
+                                    <div class="drift-status-ok">
+                                        <h3 style="color: #17B794; margin: 0;">✅ DATA STABLE</h3>
+                                        <p style="color: #c9d1d9; margin: 10px 0 0 0;">No significant drift detected (all Z-scores < 2)</p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                col_d1, col_d2, col_d3 = st.columns(3)
+                                with col_d1:
+                                    drift_share_pct = (drift_detected_count / total_checked * 100) if total_checked > 0 else 0
+                                    st.metric("Drifted Features", f"{drift_detected_count}/{total_checked}", delta=f"{drift_share_pct:.1f}%")
+                                with col_d2:
+                                    avg_z = drift_df['Z-Score'].mean()
+                                    st.metric("Avg Z-Score", f"{avg_z:.2f}", delta="Lower is better")
+                                with col_d3:
+                                    status = "⚠️ DRIFTED" if is_drifted else "✅ STABLE"
+                                    st.metric("Overall Status", status)
+                                
+                                # Show table
+                                st.markdown("---")
+                                st.markdown("### 📋 Feature-Level Drift Details")
+                                
+                                def highlight_drift_fallback(row):
+                                    if row['Drift Detected'] == 'Yes':
+                                        return ['background-color: #2d1515; color: #FF4B4B'] * len(row)
+                                    else:
+                                        return ['background-color: #0d2818; color: #17B794'] * len(row)
+                                
+                                st.dataframe(drift_df.style.apply(highlight_drift_fallback, axis=1), use_container_width=True, height=400)
                         
-                        # Key metrics
-                        dataset_drift = drift_metrics.get('DatasetDriftMetric', {})
-                        col_d1, col_d2, col_d3 = st.columns(3)
-                        
-                        with col_d1:
-                            drift_share_pct = (drift_cols / total_cols * 100) if total_cols > 0 else 0
-                            st.metric("Drifted Features", f"{drift_cols}/{total_cols}", delta=f"{drift_share_pct:.1f}%")
-                        
-                        with col_d2:
-                            drift_ratio = dataset_drift.get('drift_share', 0)
-                            st.metric("Drift Share", f"{drift_ratio:.2%}", delta="Should be low")
-                        
-                        with col_d3:
-                            status = "⚠️ DRIFTED" if is_drifted else "✅ STABLE"
-                            st.metric("Overall Status", status)
-                        
-                        # Detailed drift table
-                        st.markdown("---")
-                        st.markdown("### 📋 Feature-Level Drift Details")
-                        st.caption("Green = No drift detected | Red = Drift detected (above threshold)")
-                        render_drift_table(drift_metrics)
+                        else:
+                            # EVIDENTLY FULL RESULTS
+                            drift_metrics = extract_drift_metrics(drift_report)
+                            is_drifted, drift_cols, total_cols = render_drift_summary(drift_metrics)
+                            
+                            dataset_drift = drift_metrics.get('DatasetDriftMetric', {})
+                            col_d1, col_d2, col_d3 = st.columns(3)
+                            
+                            with col_d1:
+                                drift_share_pct = (drift_cols / total_cols * 100) if total_cols > 0 else 0
+                                st.metric("Drifted Features", f"{drift_cols}/{total_cols}", delta=f"{drift_share_pct:.1f}%")
+                            
+                            with col_d2:
+                                drift_ratio = dataset_drift.get('drift_share', 0)
+                                st.metric("Drift Share", f"{drift_ratio:.2%}", delta="Should be low")
+                            
+                            with col_d3:
+                                status = "⚠️ DRIFTED" if is_drifted else "✅ STABLE"
+                                st.metric("Overall Status", status)
+                            
+                            st.markdown("---")
+                            st.markdown("### 📋 Feature-Level Drift Details")
+                            st.caption("Green = No drift detected | Red = Drift detected (above threshold)")
+                            render_drift_table(drift_metrics)
                         
                         # Recommendations
                         st.markdown("---")
                         st.markdown("### 💡 Recommendations")
                         
-                        if is_drifted:
-                            st.warning("""
-                            **⚠️ Action Required:**
-                            1. **Investigate drifted features** - Check if the drift is due to data collection issues or genuine changes
-                            2. **Consider retraining** - If drift is significant and persistent, retrain the model with recent data
-                            3. **Update monitoring** - Adjust the drift threshold if the detected changes are expected
-                            """)
+                        if drift_report is None:
+                            if drift_detected_count > 0:
+                                st.warning("""
+                                **⚠️ Action Required:**
+                                1. **Investigate drifted features** - Check if the drift is due to data collection issues or genuine changes
+                                2. **Consider retraining** - If drift is significant and persistent, retrain the model with recent data
+                                3. **Update monitoring** - Adjust the threshold if the detected changes are expected
+                                """)
+                            else:
+                                st.success("""
+                                **✅ No Immediate Action Required**
+                                Your data distributions are stable. Continue regular monitoring to catch drift early.
+                                """)
                         else:
-                            st.success("""
-                            **✅ No Immediate Action Required**
-                            Your data distributions are stable. Continue regular monitoring to catch drift early.
-                            """)
+                            if is_drifted:
+                                st.warning("""
+                                **⚠️ Action Required:**
+                                1. **Investigate drifted features** - Check if the drift is due to data collection issues or genuine changes
+                                2. **Consider retraining** - If drift is significant and persistent, retrain the model with recent data
+                                3. **Update monitoring** - Adjust the drift threshold if the detected changes are expected
+                                """)
+                            else:
+                                st.success("""
+                                **✅ No Immediate Action Required**
+                                Your data distributions are stable. Continue regular monitoring to catch drift early.
+                                """)
                         
                         # Export option
                         with st.expander("📥 Export Report"):
-                            st.caption("Copy the JSON report for your records or to share with your data science team")
-                            try:
-                                import json
-                                report_json = json.dumps(drift_metrics, indent=2, default=str)
-                                st.code(report_json, language='json')
-                            except:
-                                st.write(drift_metrics)
+                            if drift_report is not None:
+                                try:
+                                    drift_metrics_export = extract_drift_metrics(drift_report)
+                                    report_json = json.dumps(drift_metrics_export, indent=2, default=str)
+                                    st.code(report_json, language='json')
+                                except:
+                                    st.write(drift_metrics)
+                            else:
+                                st.dataframe(drift_df, use_container_width=True)
                     
                     except Exception as e:
                         st.error(f"Drift analysis failed: {e}")
@@ -1850,7 +1996,7 @@ def main():
             
             st.markdown("---")
             
-            # Additional: Feature Distribution Comparison
+            # Feature Distribution Comparison
             st.markdown("### 📈 Feature Distribution Comparison")
             st.caption("Visual comparison of key features between reference and current periods")
             
@@ -1862,15 +2008,12 @@ def main():
                         if len(numeric_cols) == 0:
                             st.warning("No numeric columns available for comparison")
                         else:
-                            # Prepare data
                             reference_df = df.sample(frac=0.8, random_state=42)
                             current_df = df.drop(reference_df.index)
                             
-                            # Show charts for top features
-                            for col in numeric_cols[:6]:  # Limit to 6 charts
+                            for col in numeric_cols[:6]:
                                 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
                                 
-                                # Reference distribution
                                 axes[0].hist(reference_df[col].dropna(), bins=30, color='#17B794', alpha=0.7, edgecolor='white')
                                 axes[0].set_title(f'Reference: {col.replace("_", " ").title()}', color='white', fontsize=12)
                                 axes[0].set_facecolor('#161b22')
@@ -1878,7 +2021,6 @@ def main():
                                 for spine in axes[0].spines.values():
                                     spine.set_color('#30363d')
                                 
-                                # Current distribution
                                 axes[1].hist(current_df[col].dropna(), bins=30, color='#EEB76B', alpha=0.7, edgecolor='white')
                                 axes[1].set_title(f'Current: {col.replace("_", " ").title()}', color='white', fontsize=12)
                                 axes[1].set_facecolor('#161b22')
@@ -1894,7 +2036,6 @@ def main():
                     except Exception as e:
                         st.error(f"Could not generate distribution charts: {e}")
             
-            # Schedule reminder
             st.markdown("---")
             st.markdown("""
             <div class="custom-card" style="background: linear-gradient(to right, #1c2128 0%, #21262d 100%); border-left: 4px solid #8b949e;">
