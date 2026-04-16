@@ -1615,7 +1615,7 @@ def main():
             ]
             
         # --- FIX: NEW CHAT BUTTON ---
-        col_chat_header, col_chat_clear = st.columns([6, 1], gap=2px)
+        col_chat_header, col_chat_clear = st.columns([6, 1], gap="2px")
         with col_chat_clear:
             if st.button("🗑️ Clear Chat", use_container_width=True):
                 st.session_state.chat_messages = [
