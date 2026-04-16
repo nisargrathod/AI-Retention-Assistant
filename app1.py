@@ -1613,7 +1613,16 @@ def main():
             st.session_state.chat_messages = [
                 {"role": "assistant", "content": "Hello! I am your RetainAI Copilot. 🧠\n\nI have access to your entire workforce dataset and AI models. You can ask me things like:\n• 'What is our current attrition rate?'\n• 'Why are people leaving in the Sales department?'\n• 'Draft a warning email for an overworked employee.'\n\nHow can I help you today?"}
             ]
-
+            
+        # --- FIX: NEW CHAT BUTTON ---
+        col_chat_header, col_chat_clear = st.columns([6, 1], gap=2)
+        with col_chat_clear:
+            if st.button("🗑️ Clear Chat", use_container_width=True):
+                st.session_state.chat_messages = [
+                    {"role": "assistant", "content": "Chat cleared! 🧹 How can I help you with your workforce today?"}
+                ]
+                st.rerun()
+                
         # Fetch Context dynamically
         @st.cache_data
         def get_dynamic_context(_df):
