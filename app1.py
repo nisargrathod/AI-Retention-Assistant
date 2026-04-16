@@ -1604,7 +1604,7 @@ def main():
     # ====================================================================
     # --- NEW CHATBOT PAGE ---
     # ====================================================================
-    if page == "💬 HR Chatbot":
+    if page == "HR Chatbot":
         st.markdown("<h1 style='margin-bottom: 5px;'>💬 AI HR Chatbot</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #9ca3af; margin-bottom: 30px;'>I am your AI HR Copilot. Ask me anything about your workforce data, retention strategies, or draft communications instantly.</p>", unsafe_allow_html=True)
 
