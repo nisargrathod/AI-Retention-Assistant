@@ -1019,7 +1019,7 @@ def main():
         # --- NEW CHATBOT PAGE ADDED TO MENU ---
         page = option_menu(
             menu_title=None,
-            options=['⚙️ Global Setup', 'Home', 'Employee Insights', 'Predict Attrition', 'Why They Leave', 'Budget Planner', 'AI Assistant', '💬 HR Chatbot', 'AI Research Lab', 'Strategic Roadmap'],  
+            options=['Global Setup', 'Home', 'Employee Insights', 'Predict Attrition', 'Why They Leave', 'Budget Planner', 'AI Assistant', 'HR Chatbot', 'AI Research Lab', 'Strategic Roadmap'],  
             icons=['gear', 'house', 'bar-chart-line-fill', "graph-up-arrow", 'helpful-tip-fill', 'currency-rupee', 'robot', 'chat-dots-fill', 'cpu', 'flag-2-fill'], 
             menu_icon="cast", default_index=0, 
             styles={
@@ -1604,26 +1604,20 @@ def main():
     # ====================================================================
     # --- NEW CHATBOT PAGE ---
     # ====================================================================
-    if page == "💬 HR Chatbot":
-        st.markdown("<h1 style='margin-bottom: 5px;'>💬 AI HR Chatbot</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #9ca3af; margin-bottom: 30px;'>I am your AI HR Copilot. Ask me anything about your workforce data, retention strategies, or draft communications instantly.</p>", unsafe_allow_html=True)
+        # ====================================================================
+    # PAGE: HR CHATBOT
+    # ====================================================================
+    if page == "HR Chatbot":
+        st.markdown("<h1 style='margin-bottom: -10px;'>AI HR Chatbot</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #9ca3af; margin-bottom: 30px;'>I am your AI HR Copilot. Ask me anything about your workforce data or draft communications.</p>", unsafe_allow_html=True)
 
         # Initialize chat history
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = [
-                {"role": "assistant", "content": "Hello! I am your RetainAI Copilot. 🧠\n\nI have access to your entire workforce dataset and AI models. You can ask me things like:\n• 'What is our current attrition rate?'\n• 'Why are people leaving in the Sales department?'\n• 'Draft a warning email for an overworked employee.'\n\nHow can I help you today?"}
+                {"role": "assistant", "content": "Hello! I am your RetainAI Copilot. 🧠\n\nI have access to your workforce dataset. You can ask me:\n• 'What is our attrition rate?'\n• 'Draft an email for overworked staff.'\n\nHow can I help?"}
             ]
-            
-        # --- FIX: NEW CHAT BUTTON ---
-        col_chat_header, col_chat_clear = st.columns([6, 1])
-        with col_chat_clear:
-            if st.button("🗑️ Clear Chat", use_container_width=True):
-                st.session_state.chat_messages = [
-                    {"role": "assistant", "content": "Chat cleared! 🧹 How can I help you with your workforce today?"}
-                ]
-                st.rerun()
-                
-        # Fetch Context dynamically
+
+        # Cache context
         @st.cache_data
         def get_dynamic_context(_df):
             total_emp = len(_df)
@@ -1634,37 +1628,56 @@ def main():
             return f"Total Employees: {total_emp}, Attrition Rate: {attrition_rate}%, Avg Satisfaction: {avg_sat}/1.0, Avg Monthly Hours: {avg_hours}, Departments: {', '.join(departments)}"
         
         context_str = get_dynamic_context(df)
-
+        
         # Custom HTML Chat Container
         chat_container = st.container()
         
         with chat_container:
+            # Chat UI with integrated Clear button (No external blank space)
             st.markdown("""
-            <div class="chat-container">
-                <div class="chat-header">
-                    <h3 style="margin:0; color: #17B794;">RetainAI Copilot</h3>
-                    <small style="color: #8b949e;">Powered by Groq LLM + Internal Data</small>
+            <style>
+                .chat-wrapper {
+                    max-width: 850px;
+                    margin: 0 auto;
+                    position: relative;
+                }
+                .chat-clear-btn {
+                    position: absolute;
+                    top: 25px;
+                    right: 0;
+                    z-index: 10;
+                }
+            </style>
+            <div class="chat-wrapper">
+                <div class="chat-clear-btn">
+                    <button onclick="document.getElementById('clear_chat_btn').click();" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:8px 15px; border-radius:8px; cursor:pointer; font-size:14px; display:flex; align-items:center; gap:6px;">
+                        🗑️ Clear Chat
+                    </button>
                 </div>
-                <div class="chat-messages" id="chat-messages">
+                <div class="chat-container" style="margin-top: 0;">
+                    <div class="chat-header">
+                        <h3 style="margin:0; color: #17B794;">RetainAI Copilot</h3>
+                        <small style="color: #8b949e;">Powered by Groq LLM + Internal Data</small>
+                    </div>
+                    <div class="chat-messages" id="chat-messages">
             """, unsafe_allow_html=True)
+
+            # Hidden Streamlit button to trigger the Python clear action
+            st.markdown("<div style='height:0; overflow:hidden; margin:0; padding:0; border:none; background:transparent;'><div class='stButton' id='clear_chat_btn'>", unsafe_allow_html=True)
+            if st.button("Clear", key="hidden_clear_chat_btn"):
+                st.session_state.chat_messages = [
+                    {"role": "assistant", "content": "Chat cleared! 🧹 How can I help you with your workforce today?"}
+                ]
+                st.rerun()
+            st.markdown("</div></div>", unsafe_allow_html=True)
 
             for message in st.session_state.chat_messages:
                 if message["role"] == "user":
-                    st.markdown(f"""
-                    <div class="message message-user">
-                        <div class="avatar avatar-human">HR</div>
-                        <div class="bubble bubble-user">{message["content"]}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"""<div class="message message-user"><div class="avatar avatar-human">HR</div><div class="bubble bubble-user">{message["content"]}</div></div>""", unsafe_allow_html=True)
                 else:
-                    st.markdown(f"""
-                    <div class="message">
-                        <div class="avatar avatar-bot">AI</div>
-                        <div class="bubble bubble-bot">{message["content"].replace(chr(10), '<br>')}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"""<div class="message"><div class="avatar avatar-bot">AI</div><div class="bubble bubble-bot">{message["content"].replace(chr(10), '<br>')}</div></div>""", unsafe_allow_html=True)
 
-            st.markdown("</div></div>", unsafe_allow_html=True)
+            st.markdown("</div></div></div>", unsafe_allow_html=True)
 
         if prompt := st.chat_input("Ask me anything about your workforce..."):
             st.session_state.chat_messages.append({"role": "user", "content": prompt})
@@ -1672,50 +1685,18 @@ def main():
 
         if len(st.session_state.chat_messages) > 0 and st.session_state.chat_messages[-1]["role"] == "user":
             user_prompt = st.session_state.chat_messages[-1]["content"]
-            
             with st.spinner("Thinking..."):
                 try:
                     api_key = st.secrets.get("GROQ_API_KEY", None)
-                    if not api_key:
-                        bot_response = "⚠️ System Error: Groq API Key is missing. Please add it to your Streamlit secrets."
+                    if not api_key: bot_response = "⚠️ System Error: Groq API Key is missing."
                     else:
-                        llm = ChatGroq(
-                            groq_api_key=api_key, 
-                            model_name="llama-3.3-70b-versatile", 
-                            temperature=0.7, 
-                            timeout=30
-                        )
-                        
-                        template = """
-                        You are an expert, empathetic, and highly data-driven HR Assistant named 'RetainAI Copilot' working inside an enterprise application.
-                        
-                        **Current Company Data Context:**
-                        {context}
-                        
-                        **HR Manager's Question:**
-                        {question}
-                        
-                        **Instructions:**
-                        - If the question is about data (attrition rate, hours, departments), use the provided context to answer directly. Do not hallucinate numbers.
-                        - If the question asks for advice (retention, morale, policies), give practical, corporate-standard HR advice.
-                        - If the question asks to draft an email or message, write it clearly with placeholders like [Employee Name].
-                        - Keep the response concise (under 150 words) unless drafting an email.
-                        - Use bullet points for lists.
-                        - Do not use markdown code blocks.
-                        """
-                        
+                        llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.3-70b-versatile", temperature=0.7, timeout=30)
+                        template = """You are an expert HR Assistant. **Context:** {context} **Question:** {question} **Instructions:** Keep response under 150 words. Use bullet points. Do not use markdown code blocks."""
                         chain = PromptTemplate.from_template(template) | llm | StrOutputParser()
-                        bot_response = chain.invoke({
-                            "context": context_str, 
-                            "question": user_prompt
-                        })
-                        
+                        bot_response = chain.invoke({"context": context_str, "question": user_prompt})
                 except Exception as e:
-                    if "rate_limit" in str(e).lower() or "429" in str(e):
-                        bot_response = "⏳ I am experiencing high traffic right now. Please wait 10 seconds and ask your question again."
-                    else:
-                        bot_response = f"❌ Sorry, I encountered an error: {str(e)}"
-            
+                    if "rate_limit" in str(e).lower(): bot_response = "⏳ High traffic. Wait 10 seconds."
+                    else: bot_response = f"❌ Error: {str(e)}"
             st.session_state.chat_messages.append({"role": "assistant", "content": bot_response})
             st.rerun()
 
