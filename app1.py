@@ -1036,7 +1036,7 @@ def main():
     # ====================================================================
     # PAGE: GLOBAL SETUP
     # ====================================================================
-    if page == "⚙️ Global Setup":
+    if page == "Global Setup":
         st.header("⚙️ Global Setup: Upload Your Company Data")
         st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Turn this AI into your company's dedicated assistant. Upload your HR dataset, and the system will automatically retrain itself.</p>", unsafe_allow_html=True)
         uploaded_file = st.file_uploader("Upload your HR Dataset (CSV format)", type=["csv"])
