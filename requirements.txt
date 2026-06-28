@@ -10,7 +10,7 @@ lightgbm
 scikit-learn
 scipy
 dowhy
-evidently
+evidently==0.4.39
 langchain
 langchain-groq
 dice-ml
