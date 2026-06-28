@@ -30,12 +30,8 @@ from dowhy import CausalModel
 from scipy.optimize import milp, LinearConstraint, Bounds
 
 # --- Imports for Evaluation 2 (Intelligent Interface: Groq + Evidently) ---
-try:
-    from evidently.report import Report
-    from evidently.pipeline.column_mapping import ColumnMapping
-except ImportError:
-    from evidently import Report
-    from evidently import ColumnMapping
+from evidently.report import Report
+from evidently.pipeline.column_mapping import ColumnMapping
 
 # VERSION-AGNOSTIC EVIDENTLY IMPORTS
 try:
