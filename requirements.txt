@@ -9,7 +9,7 @@ matplotlib
 lightgbm
 scikit-learn
 scipy
-dowhy
+dowhy>=0.11.0
 langchain
 langchain-groq
 dice-ml
