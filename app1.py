@@ -782,17 +782,50 @@ def analyze_why_people_leave(df):
         st.markdown("<br>", unsafe_allow_html=True)
 
         effects = {}
-        model_sal = CausalModel(data=df_model, treatment='salary_num', outcome='left', graph=causal_graph.replace('\n', ' '))
-        est_sal = model_sal.estimate_effect(model_sal.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
-        effects['Salary'] = abs(est_sal.value)
-        model_sat = CausalModel(data=df_model, treatment='satisfaction_level', outcome='left', graph=causal_graph.replace('\n', ' '))
-        est_sat = model_sat.estimate_effect(model_sat.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
-        effects['Satisfaction'] = abs(est_sat.value)
-        model_hr = CausalModel(data=df_model, treatment='average_montly_hours', outcome='left', graph=causal_graph.replace('\n', ' '))
-        est_hr = model_hr.estimate_effect(model_hr.identify_effect(proceed_when_unidentifiable=True), method_name="backdoor.linear_regression")
-        effects['Overwork'] = abs(est_hr.value) * 10
+        
+        # === FIX: Directly inject the estimand to bypass broken graph engine ===
+        from dowhy.causal_identifier.identified_estimand import IdentifiedEstimand
+        
+        treatments_outcomes = [
+            ('salary_num', 'left', ['satisfaction_level']),
+            ('satisfaction_level', 'left', []),
+            ('average_montly_hours', 'left', [])
+        ]
+        
+        for treatment, outcome, backdoor_vars in treatments_outcomes:
+            try:
+                model = CausalModel(data=df_model, treatment=treatment, outcome=outcome, graph=causal_graph.replace('\n', ' '))
+                
+                # MANUALLY CREATE THE ESTIMAND - This skips identify_effect() entirely!
+                estimand = IdentifiedEstimand(
+                    estimation_model=model,
+                    treatment_variable=treatment,
+                    outcome_variable=outcome,
+                    backdoor_variables=backdoor_vars,
+                    instrumental_variables=None,
+                    frontier_sets=None,
+                    identified_estimand_type="nonparametric-ate"
+                )
+                
+                # Now estimate using our manual estimand
+                est = model.estimate_effect(estimand, method_name="backdoor.linear_regression")
+                
+                factor_name = treatment.replace('_', ' ').title()
+                if treatment == 'average_montly_hours':
+                    effects['Overwork'] = abs(est.value) * 10
+                else:
+                    effects[factor_name] = abs(est.value)
+                    
+            except Exception as e:
+                st.warning(f"Could not estimate effect for {treatment}: {e}")
+                continue
+
+        if not effects:
+            st.error("Failed to compute causal effects. The causal graph may be invalid.")
+            return
 
         sorted_effects = sorted(effects.items(), key=lambda item: item[1], reverse=True)
+        
         def get_display_info(rank, factor, value):
             if rank == 1: color = "#FF4B4B"; status = "CRITICAL DRIVER"; advice = "This is the #1 reason people leave."
             elif rank == 2: color = "#FFA500"; status = "MAJOR FACTOR"; advice = "Important to address."
@@ -800,7 +833,7 @@ def analyze_why_people_leave(df):
             return color, status, advice
 
         c1, c2, c3 = st.columns(3)
-        for idx, (col, factor_value) in enumerate(sorted_effects):
+        for idx, (col, factor_value) in enumerate(sorted_effects[:3]):  # Only show top 3
             color, status, advice = get_display_info(idx + 1, col, factor_value)
             card_html = f"<div style='background-color: {color}20; border: 1px solid {color}; border-radius: 12px; padding: 20px; text-align: center; height: 100%;'><h2 style='color: {color}; margin: 0; font-size: 2rem;'>#{idx+1} {col}</h2><h4 style='color: white; margin: 10px 0; font-weight: 600;'>{status}</h4><p style='color: #ccc; font-size: 0.9rem;'>{advice}</p></div>"
             with [c1, c2, c3][idx]: st.markdown(card_html, unsafe_allow_html=True)
@@ -808,18 +841,31 @@ def analyze_why_people_leave(df):
         with st.expander("🔧 Technical Validation"):
             st.write("### 1. Random Common Cause Test")
             try:
-                refute_rcc = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="random_common_cause")
+                # Use the manually created estimand for refutation too
+                model_sal = CausalModel(data=df_model, treatment='salary_num', outcome='left', graph=causal_graph.replace('\n', ' '))
+                estimand_sal = IdentifiedEstimand(
+                    estimation_model=model_sal,
+                    treatment_variable='salary_num',
+                    outcome_variable='left',
+                    backdoor_variables=['satisfaction_level'],
+                    instrumental_variables=None,
+                    frontier_sets=None,
+                    identified_estimand_type="nonparametric-ate"
+                )
+                est_sal = model_sal.estimate_effect(estimand_sal, method_name="backdoor.linear_regression")
+                refute_rcc = model_sal.refute_estimate(estimand_sal, est_sal, method_name="random_common_cause")
                 st.table(refute_rcc.refutation_result)
-            except Exception as e: st.error(f"Error: {e}")
+            except Exception as e: 
+                st.error(f"Refutation error: {e}")
             st.write("---")
             try:
-                refactor_placebo = model_sal.refute_estimate(model_sal.identify_effect(), est_sal, method_name="placebo_treatment_refuter")
+                refactor_placebo = model_sal.refute_estimate(estimand_sal, est_sal, method_name="placebo_treatment_refuter")
                 st.write("### 2. Placebo Treatment Refuter")
                 st.table(refactor_placebo.refutation_result)
-            except Exception: pass
+            except Exception as e: 
+                st.warning(f"Placebo test skipped: {e}")
     else:
         st.info("📊 *Advanced Causal Graph requires specific columns (satisfaction_level, salary, etc.) which are not in this uploaded dataset. Using dynamic SHAP analysis instead.*")
-
 
 # ====================================================================
 # Evaluation 2: Intelligent Interface Functions
