@@ -15,3 +15,4 @@ langchain-groq
 dice-ml
 fairlearn
 evidently==0.4.30
+networkx<3.4
