@@ -769,34 +769,37 @@ def analyze_why_people_leave(df):
         df_causal = df.copy()
         salary_map = {'low': 1, 'medium': 2, 'high': 3}
         df_causal['salary_num'] = df_causal['salary'].map(salary_map)
-        causal_graph = """digraph { salary_num -> satisfaction_level; satisfaction_level -> left; average_montly_hours -> left; number_project -> average_montly_hours; }"""
         df_model = df_causal[['salary_num', 'satisfaction_level', 'average_montly_hours', 'number_project', 'left']]
 
+        # VISUAL GRAPH (String only used for Streamlit visual, NOT passed to DoWhy)
+        visual_graph = """digraph { salary_num -> satisfaction_level; satisfaction_level -> left; average_montly_hours -> left; number_project -> average_montly_hours; }"""
+        
         st.markdown("""
         <div class="custom-card">
             <h4 style='margin-top:0; color: #17B794;'>📊 AI Causal Logic Diagram</h4>
             <p style='font-size: 0.9em; color: #8b949e;'>Internal hypothesis: Salary impacts Satisfaction, which leads to Attrition.</p>
         </div>
         """, unsafe_allow_html=True)
-        st.graphviz_chart(causal_graph)
+        st.graphviz_chart(visual_graph)
         st.markdown("<br>", unsafe_allow_html=True)
 
         effects = {}
         
-        # === FIX: Directly inject the estimand to bypass broken graph engine ===
         from dowhy.causal_identifier.identified_estimand import IdentifiedEstimand
         
+        # Define treatments and their specific backdoor variables based on our hypothesis
         treatments_outcomes = [
-            ('salary_num', 'left', ['satisfaction_level']),
-            ('satisfaction_level', 'left', []),
-            ('average_montly_hours', 'left', [])
+            ('salary_num', 'left', ['average_montly_hours', 'number_project']),
+            ('satisfaction_level', 'left', ['salary_num', 'average_montly_hours', 'number_project']),
+            ('average_montly_hours', 'left', ['salary_num', 'satisfaction_level', 'number_project'])
         ]
         
         for treatment, outcome, backdoor_vars in treatments_outcomes:
             try:
-                model = CausalModel(data=df_model, treatment=treatment, outcome=outcome, graph=causal_graph.replace('\n', ' '))
+                # FIX: Pass graph=None to force DoWhy to skip pygraphviz parsing!
+                model = CausalModel(data=df_model, treatment=treatment, outcome=outcome, graph=None)
                 
-                # MANUALLY CREATE THE ESTIMAND - This skips identify_effect() entirely!
+                # Manually create the estimand (bypasses networkx d-separation crashes)
                 estimand = IdentifiedEstimand(
                     estimation_model=model,
                     treatment_variable=treatment,
@@ -807,7 +810,7 @@ def analyze_why_people_leave(df):
                     identified_estimand_type="nonparametric-ate"
                 )
                 
-                # Now estimate using our manual estimand
+                # Estimate the effect
                 est = model.estimate_effect(estimand, method_name="backdoor.linear_regression")
                 
                 factor_name = treatment.replace('_', ' ').title()
@@ -821,7 +824,7 @@ def analyze_why_people_leave(df):
                 continue
 
         if not effects:
-            st.error("Failed to compute causal effects. The causal graph may be invalid.")
+            st.error("Failed to compute causal effects.")
             return
 
         sorted_effects = sorted(effects.items(), key=lambda item: item[1], reverse=True)
@@ -833,7 +836,7 @@ def analyze_why_people_leave(df):
             return color, status, advice
 
         c1, c2, c3 = st.columns(3)
-        for idx, (col, factor_value) in enumerate(sorted_effects[:3]):  # Only show top 3
+        for idx, (col, factor_value) in enumerate(sorted_effects[:3]):
             color, status, advice = get_display_info(idx + 1, col, factor_value)
             card_html = f"<div style='background-color: {color}20; border: 1px solid {color}; border-radius: 12px; padding: 20px; text-align: center; height: 100%;'><h2 style='color: {color}; margin: 0; font-size: 2rem;'>#{idx+1} {col}</h2><h4 style='color: white; margin: 10px 0; font-weight: 600;'>{status}</h4><p style='color: #ccc; font-size: 0.9rem;'>{advice}</p></div>"
             with [c1, c2, c3][idx]: st.markdown(card_html, unsafe_allow_html=True)
@@ -841,13 +844,13 @@ def analyze_why_people_leave(df):
         with st.expander("🔧 Technical Validation"):
             st.write("### 1. Random Common Cause Test")
             try:
-                # Use the manually created estimand for refutation too
-                model_sal = CausalModel(data=df_model, treatment='salary_num', outcome='left', graph=causal_graph.replace('\n', ' '))
+                # Use graph=None here too!
+                model_sal = CausalModel(data=df_model, treatment='salary_num', outcome='left', graph=None)
                 estimand_sal = IdentifiedEstimand(
                     estimation_model=model_sal,
                     treatment_variable='salary_num',
                     outcome_variable='left',
-                    backdoor_variables=['satisfaction_level'],
+                    backdoor_variables=['average_montly_hours', 'number_project'],
                     instrumental_variables=None,
                     frontier_sets=None,
                     identified_estimand_type="nonparametric-ate"
@@ -859,8 +862,8 @@ def analyze_why_people_leave(df):
                 st.error(f"Refutation error: {e}")
             st.write("---")
             try:
-                refactor_placebo = model_sal.refute_estimate(estimand_sal, est_sal, method_name="placebo_treatment_refuter")
                 st.write("### 2. Placebo Treatment Refuter")
+                refactor_placebo = model_sal.refute_estimate(estimand_sal, est_sal, method_name="placebo_treatment_refuter")
                 st.table(refactor_placebo.refutation_result)
             except Exception as e: 
                 st.warning(f"Placebo test skipped: {e}")
