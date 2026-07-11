@@ -14,4 +14,4 @@ langchain
 langchain-groq
 dice-ml
 fairlearn
-evidently
+evidently==0.4.30
