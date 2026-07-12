@@ -772,7 +772,7 @@ def analyze_why_people_leave(df):
         pct_overwork = round((len(df[df['average_montly_hours'] > 220]) / total_employees) * 100)
         pct_low_pay = round((len(df[df['salary'] == 'low']) / total_employees) * 100)
 
-        # Clean 3-Column Layout (Percentages only, no scary raw numbers)
+        # Clean 3-Column Layout
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -804,16 +804,6 @@ def analyze_why_people_leave(df):
                 <div style='font-size: 0.8rem; color: #8b949e; margin-top: 5px;'>Paid in bottom tier</div>
             </div>
             """, unsafe_allow_html=True)
-
-        st.markdown("<br>")
-        
-        # Simple, direct summary text
-        if pct_low_sat > pct_overwork:
-            main_reason = "dissatisfaction and lack of engagement"
-        else:
-            main_reason = "excessive workload and burnout"
-            
-        st.info(f"**Bottom Line:** The primary driver of attrition in your company is {main_reason}. Salary is a contributing factor, but rarely the sole reason people leave.")
 
     else:
         st.info("📊 *This analysis requires standard HR columns (satisfaction_level, salary, etc.) to show insights.*")
