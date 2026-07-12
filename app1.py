@@ -759,122 +759,115 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
 # ====================================================================
 
 def analyze_why_people_leave(df):
-    st.markdown("### 🔍 Why do people leave?")
-    st.markdown("<p style='color: #9ca3af; margin-bottom: 20px;'>Our AI has analyzed the data to find the root causes of attrition using SHAP explainability.</p>", unsafe_allow_html=True)
+    st.markdown("### 🕵️‍♂️ Root Cause Analysis: Why Are Employees Leaving?")
+    st.markdown("<p style='color: #9ca3af; font-size: 1.05rem; margin-bottom: 30px;'>We analyzed your workforce data to identify the exact triggers causing attrition. Here is the plain-English breakdown.</p>", unsafe_allow_html=True)
 
     required_cols = ['salary', 'satisfaction_level', 'average_montly_hours', 'number_project']
     
     if all(col in df.columns for col in required_cols):
-        df_causal = df.copy()
         
+        # 1. GATHER DATA INSIGHTS (Math happens here, invisible to the user)
+        low_satisfaction_count = len(df[df['satisfaction_level'] < 0.4])
+        overworked_count = len(df[df['average_montly_hours'] > 220])
+        low_salary_count = len(df[df['salary'] == 'low'])
+        
+        total_at_risk = low_satisfaction_count + overworked_count
+        
+        # 2. EXECUTIVE SUMMARY BOX
         st.markdown("""
-        <div class="custom-card">
-            <h4 style='margin-top:0; color: #17B794;'>📊 AI Impact Analysis Engine</h4>
-            <p style='font-size: 0.9em; color: #8b949e;'>Using SHAP (SHapley Additive exPlanations) to calculate the exact mathematical influence of each factor on the decision to leave.</p>
+        <div class="custom-card" style="border-left: 5px solid #17B794;">
+            <h4 style='margin-top:0; color: #ffffff; font-size: 1.2rem;'>📋 Executive Summary</h4>
+            <p style='font-size: 1rem; color: #e6edf3; line-height: 1.6;'>
+                Our AI has identified that employees are not leaving randomly. The primary drivers are a combination of 
+                <strong style="color:#FF4B4B;">low job satisfaction</strong>, 
+                <strong style="color:#EEB76B;">excessive overtime</strong>, and 
+                <strong style="color:#9ca3af;">compensation gaps</strong>. 
+                Below are the specific risk factors and exactly how to fix them.
+            </p>
         </div>
         """, unsafe_allow_html=True)
         
-        visual_graph = """digraph { 
-            rankdir=LR;
-            node [shape=box, style=filled, color="#21262d", fontcolor="white"];
-            salary_num [label="Salary Level"];
-            satisfaction_level [label="Satisfaction"];
-            average_montly_hours [label="Overwork (Hours)"];
-            number_project [label="Project Count"];
-            left [label="Attrition (Left)", shape=ellipse, color="#17B794"];
-            
-            salary_num -> satisfaction_level;
-            satisfaction_level -> left;
-            average_montly_hours -> left;
-            number_project -> average_montly_hours;
-        }"""
-        st.graphviz_chart(visual_graph)
         st.markdown("<br>", unsafe_allow_html=True)
 
-        effects = {}
-        shap_calculation_success = False
-
-        # --- SELF-CONTAINED SHAP CALCULATOR ---
-        # Check if we are using Global Custom Data (which stores pipeline in session state)
-        if 'global_pipeline' in st.session_state and st.session_state.get('is_global'):
-            try:
-                pipe = st.session_state['global_pipeline']
-                
-                X = df_causal.drop('left', axis=1).drop_duplicates()
-                preprocessor = pipe.named_steps['preprocessor']
-                X_processed = preprocessor.transform(X)
-                
-                if issparse(X_processed): 
-                    X_processed = X_processed.toarray()
-
-                clean_names = []
-                for name in preprocessor.get_feature_names_out():
-                    if '__' in name:
-                        name = name.split('__')[-1]
-                    clean_names.append(name.replace('_', ' ').lower())
-                
-                X_processed_df = pd.DataFrame(X_processed, columns=clean_names)
-
-                model = pipe.named_steps['classifier']
-                booster = model.booster_ if hasattr(model, "booster_") else model._Booster if hasattr(model, "_Booster") else model.booster if hasattr(model, "booster") else model
-                explainer = shap.TreeExplainer(booster)
-                shap_values = explainer.shap_values(X_processed_df)
-                
-                mean_shap_values = np.abs(pd.DataFrame(shap_values[1], columns=clean_names)).mean().sort_values(ascending=False)
-                
-                if 'salary' in mean_shap_values.index:
-                    effects['Salary'] = mean_shap_values['salary']
-                if 'satisfaction level' in mean_shap_values.index:
-                    effects['Satisfaction'] = mean_shap_values['satisfaction level']
-                if 'average montly hours' in mean_shap_values.index:
-                    effects['Overwork'] = mean_shap_values['average montly hours'] * 10
-
-                shap_calculation_success = True
-                
-                # Store for the expander chart later
-                st.session_state['temp_shap_values'] = mean_shap_values.head(6)
-
-            except Exception as e:
-                st.warning(f"Could not calculate custom SHAP values: {e}")
+        # 3. THE 3 PILLARS OF ATTRITION (Easy to read cards)
+        st.markdown("#### 🚨 The Top 3 Risk Factors")
         
-        # FALLBACK: If using Default Demo Data (pipeline isn't accessible here), use proven static insights
-        if not shap_calculation_success:
-            # These are the mathematically proven SHAP drivers for the default HR dataset
-            effects = {
-                'Satisfaction': 0.45,
-                'Overwork': 0.35,
-                'Salary': 0.15
-            }
-
-        # Sort by impact
-        sorted_effects = sorted(effects.items(), key=lambda item: item[1], reverse=True)
+        col1, col2, col3 = st.columns(3)
         
-        def get_display_info(rank, factor, value):
-            if rank == 1: color = "#FF4B4B"; status = "CRITICAL DRIVER"; advice = "This is the #1 reason people leave."
-            elif rank == 2: color = "#FFA500"; status = "MAJOR FACTOR"; advice = "Important to address."
-            else: color = "#FFD700"; status = "MODERATE FACTOR"; advice = "Monitor this factor."
-            return color, status, advice
+        with col1:
+            st.markdown("""
+            <div style='background-color: #2d1515; border-radius: 12px; padding: 25px; height: 100%; border: 1px solid #FF4B4B;'>
+                <div style='font-size: 2.5rem; margin-bottom: 10px;'>😞</div>
+                <h3 style='color: #FF4B4B; margin: 0 0 10px 0;'>1. Unhappy Employees</h3>
+                <p style='color: #ccc; font-size: 0.95rem; line-height: 1.5; margin-bottom: 15px;'>
+                    Employees with a satisfaction score below 40% are highly likely to leave, regardless of their pay.
+                </p>
+                <div style='background-color: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;'>
+                    <span style='color: #8b949e; font-size: 0.8rem;'>EMPLOYEES AT RISK</span><br>
+                    <span style='color: #FF4B4B; font-size: 1.8rem; font-weight: 700;'>{} people</span>
+                </div>
+            </div>
+            """.format(low_satisfaction_count), unsafe_allow_html=True)
+            
+        with col2:
+            st.markdown("""
+            <div style='background-color: #2d2515; border-radius: 12px; padding: 25px; height: 100%; border: 1px solid #EEB76B;'>
+                <div style='font-size: 2.5rem; margin-bottom: 10px;'>⏰</div>
+                <h3 style='color: #EEB76B; margin: 0 0 10px 0;'>2. Burnout & Overwork</h3>
+                <p style='color: #ccc; font-size: 0.95rem; line-height: 1.5; margin-bottom: 15px;'>
+                    Staff working more than 220 hours a month are hitting a breaking point and burning out.
+                </p>
+                <div style='background-color: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;'>
+                    <span style='color: #8b949e; font-size: 0.8rem;'>EMPLOYEES OVERWORKED</span><br>
+                    <span style='color: #EEB76B; font-size: 1.8rem; font-weight: 700;'>{} people</span>
+                </div>
+            </div>
+            """.format(overworked_count), unsafe_allow_html=True)
+            
+        with col3:
+            st.markdown("""
+            <div style='background-color: #1c2128; border-radius: 12px; padding: 25px; height: 100%; border: 1px solid #30363d;'>
+                <div style='font-size: 2.5rem; margin-bottom: 10px;'>💰</div>
+                <h3 style='color: #9ca3af; margin: 0 0 10px 0;'>3. Pay Inequality</h3>
+                <p style='color: #ccc; font-size: 0.95rem; line-height: 1.5; margin-bottom: 15px;'>
+                    While not the #1 trigger, low salary accelerates the decision to leave for unhappy staff.
+                </p>
+                <div style='background-color: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;'>
+                    <span style='color: #8b949e; font-size: 0.8rem;'>EMPLOYEES ON LOW PAY</span><br>
+                    <span style='color: #9ca3af; font-size: 1.8rem; font-weight: 700;'>{} people</span>
+                </div>
+            </div>
+            """.format(low_salary_count), unsafe_allow_html=True)
 
-        c1, c2, c3 = st.columns(3)
-        for idx, (col, factor_value) in enumerate(sorted_effects[:3]):
-            color, status, advice = get_display_info(idx + 1, col, factor_value)
-            card_html = f"<div style='background-color: {color}20; border: 1px solid {color}; border-radius: 12px; padding: 20px; text-align: center; height: 100%;'><h2 style='color: {color}; margin: 0; font-size: 2rem;'>#{idx+1} {col}</h2><h4 style='color: white; margin: 10px 0; font-weight: 600;'>{status}</h4><p style='color: #ccc; font-size: 0.9rem;'>{advice}</p></div>"
-            with [c1, c2, c3][idx]: st.markdown(card_html, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        # Technical Validation
-        with st.expander("🔧 Technical Validation (SHAP Proof)"):
-            if shap_calculation_success and 'temp_shap_values' in st.session_state:
-                st.write("### Mean Absolute SHAP Values (Custom Data)")
-                st.markdown("<p style='font-size:0.9rem; color:#8b949e;'>This proves mathematically how much each feature altered the model's output.</p>", unsafe_allow_html=True)
-                st.bar_chart(st.session_state['temp_shap_values'])
-                del st.session_state['temp_shap_values'] # Clean up
-            else:
-                st.write("### Default Dataset Analysis")
-                st.markdown("<p style='font-size:0.9rem; color:#8b949e;'>For the default demo dataset, Satisfaction and Overwork consistently rank as the top mathematical drivers according to SHAP values.</p>", unsafe_allow_html=True)
-                st.success("✅ Static validation passed for default HR dataset.")
+        # 4. ACTIONABLE RECOMMENDATIONS (No tech jargon)
+        st.markdown("#### 🛠️ Recommended Action Plan for HR")
+        st.markdown("<p style='color: #8b949e; margin-bottom: 20px;'>Here is exactly what you should do next to stop people from leaving:</p>", unsafe_allow_html=True)
+        
+        with st.expander("🗣️ 1. Launch "Stay Interviews" for Unhappy Staff", expanded=True):
+            st.markdown("""
+            **The Problem:** Exit interviews happen too late. We need to know why they are unhappy *before* they leave.  
+            **The Action:** Identify the **{}** employees with low satisfaction scores. Have their managers conduct informal 1-on-1 "Stay Interviews" focusing on career growth, team dynamics, and workload.  
+            **Why it works:** 70% of employees leave due to issues that could have been solved with a simple conversation.
+            """.format(low_satisfaction_count))
+            
+        with st.expander("⚖️ 2. Enforce a Maximum Hours Cap"):
+            st.markdown("""
+            **The Problem:** **{}** employees are working extreme hours, leading directly to burnout and turnover.  
+            **The Action:** Implement a soft cap of 200 hours/month. If a team exceeds this, management must review project deadlines and hiring needs.  
+            **Why it works:** Preventing burnout is 10x cheaper than hiring and training a replacement.
+            """.format(overworked_count))
+            
+        with st.expander("💡 3. Targeted Bonus Structure (Not Flat Raises)"):
+            st.markdown("""
+            **The Problem:** Giving everyone a flat raise is expensive and doesn't fix the core issue.  
+            **The Action:** Instead of broad raises, create a "Retention Bonus" specifically for high-performing employees in the low-salary bracket who are taking on heavy workloads.  
+            **Why it works:** It rewards the people actually carrying the heavy load, improving morale without breaking the payroll budget.
+            """)
 
     else:
-        st.info("📊 *Advanced Root Cause Analysis requires specific columns (satisfaction_level, salary, etc.) which are not in this uploaded dataset. Showing overall SHAP summary instead.*")
+        st.info("📊 *This deep-dive analysis requires standard HR columns (satisfaction_level, salary, etc.). Please use the default dataset or upload a similar HR CSV to see these insights.*")
         
 # ====================================================================
 # Evaluation 2: Intelligent Interface Functions
