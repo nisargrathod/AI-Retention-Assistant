@@ -845,21 +845,21 @@ def analyze_why_people_leave(df):
         st.markdown("#### 🛠️ Recommended Action Plan for HR")
         st.markdown("<p style='color: #8b949e; margin-bottom: 20px;'>Here is exactly what you should do next to stop people from leaving:</p>", unsafe_allow_html=True)
         
-        with st.expander("🗣️ 1. Launch "Stay Interviews" for Unhappy Staff", expanded=True):
+        with st.expander('🗣️ 1. Launch "Stay Interviews" for Unhappy Staff', expanded=True):
             st.markdown("""
             **The Problem:** Exit interviews happen too late. We need to know why they are unhappy *before* they leave.  
             **The Action:** Identify the **{}** employees with low satisfaction scores. Have their managers conduct informal 1-on-1 "Stay Interviews" focusing on career growth, team dynamics, and workload.  
             **Why it works:** 70% of employees leave due to issues that could have been solved with a simple conversation.
             """.format(low_satisfaction_count))
             
-        with st.expander("⚖️ 2. Enforce a Maximum Hours Cap"):
+        with st.expander('⚖️ 2. Enforce a Maximum Hours Cap'):
             st.markdown("""
             **The Problem:** **{}** employees are working extreme hours, leading directly to burnout and turnover.  
             **The Action:** Implement a soft cap of 200 hours/month. If a team exceeds this, management must review project deadlines and hiring needs.  
             **Why it works:** Preventing burnout is 10x cheaper than hiring and training a replacement.
             """.format(overworked_count))
             
-        with st.expander("💡 3. Targeted Bonus Structure (Not Flat Raises)"):
+        with st.expander('💡 3. Targeted Bonus Structure (Not Flat Raises)'):
             st.markdown("""
             **The Problem:** Giving everyone a flat raise is expensive and doesn't fix the core issue.  
             **The Action:** Instead of broad raises, create a "Retention Bonus" specifically for high-performing employees in the low-salary bracket who are taking on heavy workloads.  
