@@ -768,10 +768,6 @@ def analyze_why_people_leave(df):
     if all(col in df.columns for col in required_cols):
         df_causal = df.copy()
         
-        # We will use SHAP to calculate the actual mathematical impact of these features
-        # Mapping text to numbers for display purposes
-        salary_map = {'low': 'Low Salary', 'medium': 'Medium Salary', 'high': 'High Salary'}
-        
         st.markdown("""
         <div class="custom-card">
             <h4 style='margin-top:0; color: #17B794;'>📊 AI Impact Analysis Engine</h4>
@@ -779,7 +775,7 @@ def analyze_why_people_leave(df):
         </div>
         """, unsafe_allow_html=True)
         
-        # Visual Causal Logic Graph (Kept purely for UI display, no broken backend math)
+        # Visual Causal Logic Graph
         visual_graph = """digraph { 
             rankdir=LR;
             node [shape=box, style=filled, color="#21262d", fontcolor="white"];
@@ -797,24 +793,44 @@ def analyze_why_people_leave(df):
         st.graphviz_chart(visual_graph)
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # --- THE MAGIC: Calculate feature impact using SHAP ---
+        # --- SELF-CONTAINED SHAP CALCULATOR ---
         try:
-            shap_values, X_processed_df = get_shap_explanations(pipeline, df)
+            # 1. Get the pipeline from session state (works for both default and global data)
+            pipe = st.session_state.get('global_pipeline', pipeline)
             
-            # Calculate mean absolute SHAP value for each feature to find "Drivers"
-            # Taking absolute value shows the STRENGTH of the factor, regardless of if it pushes up or down
-            mean_shap_values = np.abs(pd.DataFrame(shap_values[1], columns=X_processed_df.columns)).mean().sort_values(ascending=False)
+            # 2. Process the data exactly like the model expects
+            X = df_causal.drop('left', axis=1).drop_duplicates()
+            preprocessor = pipe.named_steps['preprocessor']
+            X_processed = preprocessor.transform(X)
             
+            if issparse(X_processed): 
+                X_processed = X_processed.toarray()
+
+            # 3. Clean column names to match SHAP output
+            clean_names = []
+            for name in preprocessor.get_feature_names_out():
+                if '__' in name:
+                    name = name.split('__')[-1]
+                clean_names.append(name.replace('_', ' ').lower())
+            
+            X_processed_df = pd.DataFrame(X_processed, columns=clean_names)
+
+            # 4. Calculate SHAP values
+            model = pipe.named_steps['classifier']
+            booster = model.booster_ if hasattr(model, "booster_") else model._Booster if hasattr(model, "_Booster") else model.booster if hasattr(model, "booster") else model
+            explainer = shap.TreeExplainer(booster)
+            shap_values = explainer.shap_values(X_processed_df)
+            
+            # 5. Calculate mean absolute impact for each feature
+            # Index 1 represents the SHAP values for the "Left" class
+            mean_shap_values = np.abs(pd.DataFrame(shap_values[1], columns=clean_names)).mean().sort_values(ascending=False)
+            
+            # 6. Map SHAP columns to our readable driver names
             effects = {}
-            
-            # Map SHAP columns to our readable names
-            if 'salary num' in mean_shap_values.index or 'salary' in mean_shap_values.index:
-                sal_col = 'salary num' if 'salary num' in mean_shap_values.index else 'salary'
-                effects['Salary'] = mean_shap_values[sal_col]
-                
+            if 'salary' in mean_shap_values.index:
+                effects['Salary'] = mean_shap_values['salary']
             if 'satisfaction level' in mean_shap_values.index:
                 effects['Satisfaction'] = mean_shap_values['satisfaction level']
-                
             if 'average montly hours' in mean_shap_values.index:
                 effects['Overwork'] = mean_shap_values['average montly hours'] * 10  # Scaled for visual comparison
 
@@ -833,7 +849,7 @@ def analyze_why_people_leave(df):
                 card_html = f"<div style='background-color: {color}20; border: 1px solid {color}; border-radius: 12px; padding: 20px; text-align: center; height: 100%;'><h2 style='color: {color}; margin: 0; font-size: 2rem;'>#{idx+1} {col}</h2><h4 style='color: white; margin: 10px 0; font-weight: 600;'>{status}</h4><p style='color: #ccc; font-size: 0.9rem;'>{advice}</p></div>"
                 with [c1, c2, c3][idx]: st.markdown(card_html, unsafe_allow_html=True)
 
-            # Technical Validation replaced with SHAP Proof
+            # Technical Validation
             with st.expander("🔧 Technical Validation (SHAP Proof)"):
                 st.write("### Mean Absolute SHAP Values (Feature Importance)")
                 st.markdown("<p style='font-size:0.9rem; color:#8b949e;'>This proves mathematically how much each feature altered the model's output.</p>", unsafe_allow_html=True)
@@ -843,7 +859,7 @@ def analyze_why_people_leave(df):
             st.error(f"SHAP calculation error: {e}")
 
     else:
-        st.info("📊 *Advanced Root Cause Analysis requires specific columns (satisfaction_level, salary, etc.) which are not in this uploaded dataset. Using dynamic SHAP analysis instead.*")
+        st.info("📊 *Advanced Root Cause Analysis requires specific columns (satisfaction_level, salary, etc.) which are not in this uploaded dataset. Showing overall SHAP summary instead.*")
         
 # ====================================================================
 # Evaluation 2: Intelligent Interface Functions
