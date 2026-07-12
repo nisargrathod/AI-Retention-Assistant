@@ -759,115 +759,64 @@ def create_vizualization(the_df, viz_type="box", data_type="number"):
 # ====================================================================
 
 def analyze_why_people_leave(df):
-    st.markdown("### 🕵️‍♂️ Root Cause Analysis: Why Are Employees Leaving?")
-    st.markdown("<p style='color: #9ca3af; font-size: 1.05rem; margin-bottom: 30px;'>We analyzed your workforce data to identify the exact triggers causing attrition. Here is the plain-English breakdown.</p>", unsafe_allow_html=True)
+    st.markdown("### 🔍 Why Are Employees Leaving?")
+    st.markdown("<p style='color: #8b949e;'>A clean breakdown of the actual triggers based on your data.</p>", unsafe_allow_html=True)
 
     required_cols = ['salary', 'satisfaction_level', 'average_montly_hours', 'number_project']
     
     if all(col in df.columns for col in required_cols):
+        total_employees = len(df)
         
-        # 1. GATHER DATA INSIGHTS (Math happens here, invisible to the user)
-        low_satisfaction_count = len(df[df['satisfaction_level'] < 0.4])
-        overworked_count = len(df[df['average_montly_hours'] > 220])
-        low_salary_count = len(df[df['salary'] == 'low'])
-        
-        total_at_risk = low_satisfaction_count + overworked_count
-        
-        # 2. EXECUTIVE SUMMARY BOX
-        st.markdown("""
-        <div class="custom-card" style="border-left: 5px solid #17B794;">
-            <h4 style='margin-top:0; color: #ffffff; font-size: 1.2rem;'>📋 Executive Summary</h4>
-            <p style='font-size: 1rem; color: #e6edf3; line-height: 1.6;'>
-                Our AI has identified that employees are not leaving randomly. The primary drivers are a combination of 
-                <strong style="color:#FF4B4B;">low job satisfaction</strong>, 
-                <strong style="color:#EEB76B;">excessive overtime</strong>, and 
-                <strong style="color:#9ca3af;">compensation gaps</strong>. 
-                Below are the specific risk factors and exactly how to fix them.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
+        # Calculate accurate percentages of the total dataset
+        pct_low_sat = round((len(df[df['satisfaction_level'] < 0.4]) / total_employees) * 100)
+        pct_overwork = round((len(df[df['average_montly_hours'] > 220]) / total_employees) * 100)
+        pct_low_pay = round((len(df[df['salary'] == 'low']) / total_employees) * 100)
 
-        # 3. THE 3 PILLARS OF ATTRITION (Easy to read cards)
-        st.markdown("#### 🚨 The Top 3 Risk Factors")
-        
+        # Clean 3-Column Layout (Percentages only, no scary raw numbers)
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.markdown("""
-            <div style='background-color: #2d1515; border-radius: 12px; padding: 25px; height: 100%; border: 1px solid #FF4B4B;'>
-                <div style='font-size: 2.5rem; margin-bottom: 10px;'>😞</div>
-                <h3 style='color: #FF4B4B; margin: 0 0 10px 0;'>1. Unhappy Employees</h3>
-                <p style='color: #ccc; font-size: 0.95rem; line-height: 1.5; margin-bottom: 15px;'>
-                    Employees with a satisfaction score below 40% are highly likely to leave, regardless of their pay.
-                </p>
-                <div style='background-color: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;'>
-                    <span style='color: #8b949e; font-size: 0.8rem;'>EMPLOYEES AT RISK</span><br>
-                    <span style='color: #FF4B4B; font-size: 1.8rem; font-weight: 700;'>{} people</span>
-                </div>
+            st.markdown(f"""
+            <div style='text-align: center; padding: 20px; background-color: #1c2128; border-radius: 12px; border: 1px solid #30363d;'>
+                <div style='font-size: 2rem; margin-bottom: 10px;'>😞</div>
+                <div style='font-size: 2.2rem; font-weight: 800; color: #FF4B4B;'>{pct_low_sat}%</div>
+                <div style='font-size: 0.95rem; color: #c9d1d9; font-weight: 600; margin-top: 5px;'>Low Satisfaction</div>
+                <div style='font-size: 0.8rem; color: #8b949e; margin-top: 5px;'>Score below 40%</div>
             </div>
-            """.format(low_satisfaction_count), unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
             
         with col2:
-            st.markdown("""
-            <div style='background-color: #2d2515; border-radius: 12px; padding: 25px; height: 100%; border: 1px solid #EEB76B;'>
-                <div style='font-size: 2.5rem; margin-bottom: 10px;'>⏰</div>
-                <h3 style='color: #EEB76B; margin: 0 0 10px 0;'>2. Burnout & Overwork</h3>
-                <p style='color: #ccc; font-size: 0.95rem; line-height: 1.5; margin-bottom: 15px;'>
-                    Staff working more than 220 hours a month are hitting a breaking point and burning out.
-                </p>
-                <div style='background-color: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;'>
-                    <span style='color: #8b949e; font-size: 0.8rem;'>EMPLOYEES OVERWORKED</span><br>
-                    <span style='color: #EEB76B; font-size: 1.8rem; font-weight: 700;'>{} people</span>
-                </div>
+            st.markdown(f"""
+            <div style='text-align: center; padding: 20px; background-color: #1c2128; border-radius: 12px; border: 1px solid #30363d;'>
+                <div style='font-size: 2rem; margin-bottom: 10px;'>⏰</div>
+                <div style='font-size: 2.2rem; font-weight: 800; color: #EEB76B;'>{pct_overwork}%</div>
+                <div style='font-size: 0.95rem; color: #c9d1d9; font-weight: 600; margin-top: 5px;'>Burnout Risk</div>
+                <div style='font-size: 0.8rem; color: #8b949e; margin-top: 5px;'>Working 220+ hrs/mo</div>
             </div>
-            """.format(overworked_count), unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
             
         with col3:
-            st.markdown("""
-            <div style='background-color: #1c2128; border-radius: 12px; padding: 25px; height: 100%; border: 1px solid #30363d;'>
-                <div style='font-size: 2.5rem; margin-bottom: 10px;'>💰</div>
-                <h3 style='color: #9ca3af; margin: 0 0 10px 0;'>3. Pay Inequality</h3>
-                <p style='color: #ccc; font-size: 0.95rem; line-height: 1.5; margin-bottom: 15px;'>
-                    While not the #1 trigger, low salary accelerates the decision to leave for unhappy staff.
-                </p>
-                <div style='background-color: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;'>
-                    <span style='color: #8b949e; font-size: 0.8rem;'>EMPLOYEES ON LOW PAY</span><br>
-                    <span style='color: #9ca3af; font-size: 1.8rem; font-weight: 700;'>{} people</span>
-                </div>
+            st.markdown(f"""
+            <div style='text-align: center; padding: 20px; background-color: #1c2128; border-radius: 12px; border: 1px solid #30363d;'>
+                <div style='font-size: 2rem; margin-bottom: 10px;'>💰</div>
+                <div style='font-size: 2.2rem; font-weight: 800; color: #17B794;'>{pct_low_pay}%</div>
+                <div style='font-size: 0.95rem; color: #c9d1d9; font-weight: 600; margin-top: 5px;'>Low Salary Band</div>
+                <div style='font-size: 0.8rem; color: #8b949e; margin-top: 5px;'>Paid in bottom tier</div>
             </div>
-            """.format(low_salary_count), unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # 4. ACTIONABLE RECOMMENDATIONS (No tech jargon)
-        st.markdown("#### 🛠️ Recommended Action Plan for HR")
-        st.markdown("<p style='color: #8b949e; margin-bottom: 20px;'>Here is exactly what you should do next to stop people from leaving:</p>", unsafe_allow_html=True)
+        st.markdown("<br>")
         
-        with st.expander('🗣️ 1. Launch "Stay Interviews" for Unhappy Staff', expanded=True):
-            st.markdown("""
-            **The Problem:** Exit interviews happen too late. We need to know why they are unhappy *before* they leave.  
-            **The Action:** Identify the **{}** employees with low satisfaction scores. Have their managers conduct informal 1-on-1 "Stay Interviews" focusing on career growth, team dynamics, and workload.  
-            **Why it works:** 70% of employees leave due to issues that could have been solved with a simple conversation.
-            """.format(low_satisfaction_count))
+        # Simple, direct summary text
+        if pct_low_sat > pct_overwork:
+            main_reason = "dissatisfaction and lack of engagement"
+        else:
+            main_reason = "excessive workload and burnout"
             
-        with st.expander('⚖️ 2. Enforce a Maximum Hours Cap'):
-            st.markdown("""
-            **The Problem:** **{}** employees are working extreme hours, leading directly to burnout and turnover.  
-            **The Action:** Implement a soft cap of 200 hours/month. If a team exceeds this, management must review project deadlines and hiring needs.  
-            **Why it works:** Preventing burnout is 10x cheaper than hiring and training a replacement.
-            """.format(overworked_count))
-            
-        with st.expander('💡 3. Targeted Bonus Structure (Not Flat Raises)'):
-            st.markdown("""
-            **The Problem:** Giving everyone a flat raise is expensive and doesn't fix the core issue.  
-            **The Action:** Instead of broad raises, create a "Retention Bonus" specifically for high-performing employees in the low-salary bracket who are taking on heavy workloads.  
-            **Why it works:** It rewards the people actually carrying the heavy load, improving morale without breaking the payroll budget.
-            """)
+        st.info(f"**Bottom Line:** The primary driver of attrition in your company is {main_reason}. Salary is a contributing factor, but rarely the sole reason people leave.")
 
     else:
-        st.info("📊 *This deep-dive analysis requires standard HR columns (satisfaction_level, salary, etc.). Please use the default dataset or upload a similar HR CSV to see these insights.*")
+        st.info("📊 *This analysis requires standard HR columns (satisfaction_level, salary, etc.) to show insights.*")
         
 # ====================================================================
 # Evaluation 2: Intelligent Interface Functions
